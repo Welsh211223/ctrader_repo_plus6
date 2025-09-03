@@ -1,0 +1,15 @@
+# verify these lines exist in .gitignore
+@"
+.venv/
+__pycache__/
+*.py[cod]
+
+.env
+.env.*
+
+data/
+!data/.keep
+"@ | Out-File -Encoding utf8 .\.gitignore
+
+# keep the data folder structure without tracking files
+ni .\data\.keep -Force | Out-Null

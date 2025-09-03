@@ -1,0 +1,15 @@
+def test_imports():
+    import ctrader.cli.trade
+    import ctrader.config_loader
+    import ctrader.portfolio
+    import ctrader.risk.risk_manager
+    import ctrader.strategies.trend_filter
+    import ctrader.strategies.momentum
+    import ctrader.strategies.inverse_vol
+    import ctrader.data_providers.coinspot
+    import ctrader.data_providers.marketdata
+    import ctrader.data_providers.coinspot_v2
+    import ctrader.execution.paper
+    import ctrader.execution.coinspot_execution
+    import ctrader.analytics
+    import ctrader.notify

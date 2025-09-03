@@ -1,34 +1,53 @@
-from __future__ import annotations
-# --- path shim so 'import ctrader' works even when running by absolute script path ---
+﻿from __future__ import annotations
+
+"""
+ctrader.cli.trade
+- Rebalancing CLI with safety rails:
+  * run lock (no overlaps)
+  * risk-off cash buffer (BTC < SMA200)
+  * drift threshold
+  * turnover cap (gross/net) with adaptive mode and order priority
+  * cooldown per-asset (bypass on big drift)
+  * circuit breakers (missing prices / max trades / max notional)
+  * CoinSpot buy-price & CoinGecko fallbacks (planning only)
+  * guard preview (no live orders)
+  * signals/plan/summary logs + JSONL run log
+  * Discord/Slack optional notifications
+"""
+# --- path shim so 'import ctrader' works if run by absolute script path ---
 import sys
 from pathlib import Path
+
 SRC_DIR = Path(__file__).resolve().parents[3]  # ...\src
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
-# ------------------------------------------------------------------------------------
+# --------------------------------------------------------------------------
 
 import argparse
-import os
 import csv
 import json
-from datetime import datetime, timezone, timedelta
-from dotenv import load_dotenv
+import os
+from datetime import datetime, timedelta, timezone
+
 import pandas as pd
+from dotenv import load_dotenv
 
+from ctrader.analytics import append_trades, update_equity_and_pnl
 from ctrader.config_loader import load_pools_config
-from ctrader.data_providers.coinspot import fetch_prices_coinspot, fetch_buy_price
+from ctrader.data_providers.coinspot import (fetch_buy_price,
+                                             fetch_prices_coinspot)
 from ctrader.data_providers.marketdata import fetch_history_daily
-from ctrader.portfolio import compute_targets, compute_drift, save_holdings, load_holdings
-from ctrader.risk.risk_manager import RiskRules, enforce_caps
-from ctrader.risk.rebalancer import create_rebalance_plan, any_drift_exceeds_threshold
-from ctrader.strategies.trend_filter import apply_trend_filter
-from ctrader.strategies.inverse_vol import inverse_vol_weights
-from ctrader.strategies.momentum import momentum_12_1, boost_top_k
-from ctrader.execution.paper import PaperLedger, simulate_exec
 from ctrader.execution.coinspot_execution import place_plan_coinspot
-from ctrader.analytics import update_equity_and_pnl, append_trades
+from ctrader.execution.paper import PaperLedger, simulate_exec
 from ctrader.notify import post_discord_embed
-
+from ctrader.portfolio import (compute_drift, compute_targets, load_holdings,
+                               save_holdings)
+from ctrader.risk.rebalancer import (any_drift_exceeds_threshold,
+                                     create_rebalance_plan)
+from ctrader.risk.risk_manager import RiskRules, enforce_caps
+from ctrader.strategies.inverse_vol import inverse_vol_weights
+from ctrader.strategies.momentum import boost_top_k, momentum_12_1
+from ctrader.strategies.trend_filter import apply_trend_filter
 
 # --------------------------- helpers ---------------------------
 
@@ -187,7 +206,7 @@ def _coingecko_simple_price(symbols: list[str], vs: str) -> dict[str, float]:
     Returns mapping TICKER -> price_in_vs (float), skips unknowns.
     Planning-only safety: never used to place live orders.
     """
-    import requests
+    import requests  # local import so requests isn't strictly required if fallback isn't used
     ids_map = _coingecko_ids()
     ids = [ids_map[s] for s in symbols if s in ids_map]
     if not ids:
@@ -260,34 +279,23 @@ def main():
     # sizing & constraints
     ap.add_argument("--min-cash-reserve-pct", type=float, default=0.0)
     ap.add_argument("--min-order-value", type=float, default=5.0)
-    ap.add_argument("--qty-precision", type=str,
-                    default="BTC:6,ETH:6,SOL:6,AVAX:6,HBAR:6,QNT:6,DOGE:0,SHIB:0,XRP:2")
+    ap.add_argument("--qty-precision", type=str, default="BTC:6,ETH:6,SOL:6,AVAX:6,HBAR:6,QNT:6,DOGE:0,SHIB:0,XRP:2")
 
     # turnover cap controls
-    ap.add_argument("--turnover-cap-pct", type=float, default=None,
-                    help="Override execution.turnover_cap_pct for this run (percent of equity).")
-    ap.add_argument("--turnover-cap-mode", choices=["gross", "net"], default="gross",
-                    help="gross = sum notionals; net = buys - sells (more permissive).")
-    ap.add_argument("--turnover-priority", choices=["sell_first", "largest_first", "drift_first"], default="sell_first",
-                    help="Which trades to include first under the cap.")
-    ap.add_argument("--turnover-adaptive", action="store_true",
-                    help="Adapt cap using vol/drawdown & risk-off; notifies Discord with reasons when --notify.")
+    ap.add_argument("--turnover-cap-pct", type=float, default=None, help="Override execution.turnover_cap_pct for this run (percent of equity).")
+    ap.add_argument("--turnover-cap-mode", choices=["gross", "net"], default="gross", help="gross = sum notionals; net = buys - sells (more permissive).")
+    ap.add_argument("--turnover-priority", choices=["sell_first", "largest_first", "drift_first"], default="sell_first", help="Which trades to include first under the cap.")
+    ap.add_argument("--turnover-adaptive", action="store_true", help="Adapt cap using vol/drawdown & risk-off; notifies Discord with reasons when --notify.")
 
     # circuit breakers & cooldown
-    ap.add_argument("--max-trades-hard", type=int, default=50,
-                    help="Abort if plan has more than this many trades after capping.")
-    ap.add_argument("--max-notional-pct-hard", type=float, default=80.0,
-                    help="Abort if gross notional exceeds this % of equity (post cap).")
-    ap.add_argument("--missing-price-pct-hard", type=float, default=50.0,
-                    help="Abort if more than this % of assets have missing/zero prices.")
-    ap.add_argument("--cooldown-minutes", type=int, default=0,
-                    help="Skip re-trading same ticker within this many minutes unless bypassed by drift.")
-    ap.add_argument("--cooldown-bypass-drift-pct", type=float, default=3.0,
-                    help="If absolute position drift exceeds this %, bypass cooldown for that ticker.")
+    ap.add_argument("--max-trades-hard", type=int, default=50, help="Abort if plan has more than this many trades after capping.")
+    ap.add_argument("--max-notional-pct-hard", type=float, default=80.0, help="Abort if gross notional exceeds this % of equity (post cap).")
+    ap.add_argument("--missing-price-pct-hard", type=float, default=50.0, help="Abort if more than this % of assets have missing/zero prices.")
+    ap.add_argument("--cooldown-minutes", type=int, default=0, help="Skip re-trading same ticker within this many minutes unless bypassed by drift.")
+    ap.add_argument("--cooldown-bypass-drift-pct", type=float, default=3.0, help="If absolute position drift exceeds this %, bypass cooldown for that ticker.")
 
     # price fallback
-    ap.add_argument("--fallback-coingecko", action="store_true",
-                    help="Use CoinGecko simple price as final fallback for missing/zero prices (planning only).")
+    ap.add_argument("--fallback-coingecko", action="store_true", help="Use CoinGecko simple price as final fallback for missing/zero prices (planning only).")
 
     # polling (live)
     ap.add_argument("--order-timeout-sec", type=int, default=30)
@@ -339,9 +347,11 @@ def main():
             msg = "Config issues: " + "; ".join(issues)
             print(msg)
             if args.notify:
-                webhook = cfg.get("global", {}).get("webhook_url", "").strip()
-                if webhook:
-                    post_discord_embed(webhook, "Config issues", msg)
+                # prefer .env webhook if YAML is blank
+                gtmp = cfg.get("global", {})
+                webhook_tmp = (gtmp.get("webhook_url", "") or os.getenv("DISCORD_WEBHOOK", "")).strip()
+                if webhook_tmp:
+                    post_discord_embed(webhook_tmp, "Config issues", msg)
                 _slack("Config issues", {"issues": msg})
 
         g = cfg.get("global", {})
@@ -349,7 +359,7 @@ def main():
         quote = g.get("quote_currency", "AUD").upper()
         fee_bps = float(g.get("fee_bps", 10))
         slip_bps = float(g.get("slippage_bps", 5))
-        webhook = g.get("webhook_url", "").strip()
+webhook = (g.get("webhook_url", "") or os.getenv("DISCORD_WEBHOOK", "")).strip()
 
         # --- config-driven execution defaults with CLI override ---
         exec_cfg = cfg.get("execution", {})
@@ -375,37 +385,17 @@ def main():
 
         # === BASE WEIGHTS + ADJUSTMENTS ===
         w = dict(pcfg["assets"])
-        w = apply_trend_filter(
-            w, os.getenv("EXCHANGE_ID", "binance"), quote,
-            int(g.get("trend_filter_sma_days", 200)),
-            float(g.get("trend_min_weight", 0.25)),
-        )
+        w = apply_trend_filter(w, os.getenv("EXCHANGE_ID", "binance"), quote, int(g.get("trend_filter_sma_days", 200)), float(g.get("trend_min_weight", 0.25)))
         if cfg.get("sizing", {}).get("risk_parity", True):
             szz = cfg["sizing"]
-            w = inverse_vol_weights(
-                w, os.getenv("EXCHANGE_ID", "binance"), quote,
-                int(szz.get("vol_lookback_days", 30)),
-                float(szz.get("vol_floor", 0.0005)),
-                float(szz.get("risk_parity_strength", 1.0)),
-            )
+            w = inverse_vol_weights(w, os.getenv("EXCHANGE_ID", "binance"), quote, int(szz.get("vol_lookback_days", 30)), float(szz.get("vol_floor", 0.0005)), float(szz.get("risk_parity_strength", 1.0)))
         if cfg.get("momentum", {}).get("enabled", True):
             mom = cfg["momentum"]
-            scores = momentum_12_1(
-                list(w.keys()), os.getenv("EXCHANGE_ID", "binance"), quote,
-                int(mom.get("lookback_months", 12)),
-                int(mom.get("skip_recent_months", 1)),
-            )
-            w = boost_top_k(
-                w, scores, int(mom.get("top_k", 6)), float(mom.get("momentum_boost_pct", 0.04)),
-            )
+            scores = momentum_12_1(list(w.keys()), os.getenv("EXCHANGE_ID", "binance"), quote, int(mom.get("lookback_months", 12)), int(mom.get("skip_recent_months", 1)))
+            w = boost_top_k(w, scores, int(mom.get("top_k", 6)), float(mom.get("momentum_boost_pct", 0.04)))
 
         # === RISK CAPS ===
-        rules = RiskRules(
-            float(pcfg.get("max_per_asset_pct", 100)),
-            float(pcfg.get("max_meme_bucket_pct", 100)),
-            float(pcfg.get("max_ai_bucket_pct", 100)),
-            pcfg.get("per_asset_caps", {}),
-        )
+        rules = RiskRules(float(pcfg.get("max_per_asset_pct", 100)), float(pcfg.get("max_meme_bucket_pct", 100)), float(pcfg.get("max_ai_bucket_pct", 100)), pcfg.get("per_asset_caps", {}))
         w = enforce_caps(w, pcfg.get("categories", {}), rules)
 
         # === PRICES ===
@@ -431,13 +421,12 @@ def main():
                 if float(prices.get(t, 0.0)) <= 0.0 and v > 0.0:
                     prices[t] = float(v)
 
-        # Missing-price circuit breaker (HOTFIX: keep on one line)
+        # Missing-price circuit breaker
         miss_after = sum(1 for t in symbols if float(prices.get(t, 0.0)) <= 0.0)
         miss_pct = 100.0 * miss_after / max(1, len(symbols))
         threshold = float(getattr(args, "missing_price_pct_hard", 50.0))
         if miss_pct > threshold:
-            msg = (f"Hard break: {miss_pct:.1f}% of assets missing price "
-                   f"(threshold {threshold:.1f}%). Aborting.")
+            msg = f"Hard break: {miss_pct:.1f}% of assets missing price (threshold {threshold:.1f}%). Aborting."
             print(msg)
             if args.notify and webhook:
                 post_discord_embed(webhook, "Circuit breaker: missing prices", msg)
@@ -457,21 +446,13 @@ def main():
 
         # Notify risk state (Discord/Slack)
         if args.notify and webhook:
-            post_discord_embed(
-                webhook, "Risk state", f"Pool: {args.pool}",
-                fields={
-                    "risk_off": str(risk_off),
-                    "extra_reserve_pct": f"{extra:.1f}%",
-                    "baseline_reserve_pct": f"{(args.min_cash_reserve_pct or 0.0):.1f}%",
-                    "total_reserve_pct": f"{total_reserve_pct:.1f}%",
-                },
-            )
-        _slack("Risk state", {
-            "risk_off": str(risk_off),
-            "extra_reserve_pct": f"{extra:.1f}%",
-            "baseline_reserve_pct": f"{(args.min_cash_reserve_pct or 0.0):.1f}%",
-            "total_reserve_pct": f"{total_reserve_pct:.1f}%",
-        })
+            post_discord_embed(webhook, "Risk state", f"Pool: {args.pool}", fields={
+                "risk_off": str(risk_off),
+                "extra_reserve_pct": f"{extra:.1f}%",
+                "baseline_reserve_pct": f"{(args.min_cash_reserve_pct or 0.0):.1f}%",
+                "total_reserve_pct": f"{total_reserve_pct:.1f}%",
+            })
+        _slack("Risk state", {"risk_off": str(risk_off), "extra_reserve_pct": f"{extra:.1f}%", "baseline_reserve_pct": f"{(args.min_cash_reserve_pct or 0.0):.1f}%", "total_reserve_pct": f"{total_reserve_pct:.1f}%"})
 
         targets = compute_targets(equity - reserve, w, prices)
 
@@ -485,19 +466,11 @@ def main():
         if args.notify and webhook and thresh_cfg > 0:
             drift_breach = any_drift_exceeds_threshold(current, targets, thresh_cfg)
             if drift_breach:
-                post_discord_embed(
-                    webhook, "Drift threshold breached",
-                    f"Pool: {args.pool}, threshold: {thresh_cfg}%",
-                )
+                post_discord_embed(webhook, "Drift threshold breached", f"Pool: {args.pool}, threshold: {thresh_cfg}%")
 
-        plan = create_rebalance_plan(
-            current, targets, prices,
-            float(cfg.get("rebalance", {}).get("threshold_pct", 0.0)),
-            min_order_value=float(args.min_order_value),
-            qty_precision=qmap,
-        )
+        plan = create_rebalance_plan(current, targets, prices, float(cfg.get("rebalance", {}).get("threshold_pct", 0.0)), min_order_value=float(args.min_order_value), qty_precision=qmap)
 
-        # Per-asset cooldown filter (HOTFIX: keep line unwrapped)
+        # Per-asset cooldown filter
         if args.cooldown_minutes > 0:
             last_ts = _load_last_trade_times(args.pool)
             cutoff = datetime.now(timezone.utc) - timedelta(minutes=int(args.cooldown_minutes))
@@ -509,15 +482,14 @@ def main():
                     kept_rows.append(r); continue
                 lt = last_ts.get(t)
                 if lt and lt > cutoff:
-                    # allow bypass if drift is large (compare notional drift vs equity)
+                    # bypass if big drift relative to equity
                     try:
                         row = drift.loc[drift["ticker"] == t].iloc[0]
                         if abs(float(row.get("est_value", 0.0))) / max(1.0, equity) * 100.0 >= float(args.cooldown_bypass_drift_pct):
-                            kept_rows.append(r)
-                            continue
+                            kept_rows.append(r); continue
                     except Exception:
                         pass
-                    # skip due to cooldown
+                    # else skip due to cooldown
                     continue
                 kept_rows.append(r)
             plan = pd.DataFrame(kept_rows) if kept_rows else plan.iloc[0:0]
@@ -526,6 +498,7 @@ def main():
         print(plan.to_string(index=False))
 
         # ---------------- Turnover Cap (smart & optional) ----------------
+        exec_cfg = cfg.get("execution", {})
         base_cap_pct = float(exec_cfg.get("turnover_cap_pct", 20.0))
         if args.turnover_cap_pct is not None:
             base_cap_pct = float(args.turnover_cap_pct)
@@ -596,8 +569,7 @@ def main():
                         gross_spent += v
 
             plan = pd.DataFrame(kept) if kept else plan.iloc[0:0]
-            print(f"Applied turnover cap {cap_pct:.1f}% ({'net' if cap_mode=='net' else 'gross'}) "
-                  f"-> notional cap {cap_value:.2f}, selected {len(plan)} trades")
+            print(f"Applied turnover cap {cap_pct:.1f}% ({'net' if cap_mode=='net' else 'gross'}) -> notional cap {cap_value:.2f}, selected {len(plan)} trades")
         # ------------------------------------------------------------------
 
         # Circuit breakers (post-cap)
@@ -612,8 +584,7 @@ def main():
 
         if args.max_notional_pct_hard is not None:
             if gross_notional > (equity * float(args.max_notional_pct_hard) / 100.0):
-                msg = (f"Hard break: gross notional {gross_notional:.2f} exceeds "
-                       f"{args.max_notional_pct_hard:.1f}% of equity. Aborting.")
+                msg = f"Hard break: gross notional {gross_notional:.2f} exceeds {args.max_notional_pct_hard:.1f}% of equity. Aborting."
                 print(msg)
                 if args.notify and webhook:
                     post_discord_embed(webhook, "Circuit breaker tripped", msg)
@@ -629,16 +600,15 @@ def main():
             wcsv = csv.writer(f)
             wcsv.writerow(["ticker", "side", "qty", "est_value", "price_used"])
             for _, r in plan.iterrows():
-                wcsv.writerow([
-                    r["ticker"], r["side"], float(r["qty"]),
-                    float(r["est_value"]), float(prices.get(r["ticker"], 0.0)),
-                ])
+                wcsv.writerow([r["ticker"], r["side"], float(r["qty"]), float(r["est_value"]), float(prices.get(r["ticker"], 0.0))])
         print(f"\nSaved run summary: {run_file}")
 
         # Signals log (audit)
-        from ctrader.strategies.momentum import momentum_12_1 as _mom_12_1
-        from ctrader.data_providers.marketdata import fetch_history_daily as _hist
         import csv as _csv
+
+        from ctrader.data_providers.marketdata import \
+            fetch_history_daily as _hist
+        from ctrader.strategies.momentum import momentum_12_1 as _mom_12_1
 
         sig_dir = Path(__file__).resolve().parents[3] / "data" / "signals"
         sig_dir.mkdir(parents=True, exist_ok=True)
@@ -676,20 +646,13 @@ def main():
             if not args.notify or not webhook:
                 return
             title = f"{ev.get('side', '?')} {ev.get('ticker', '?')}"
-            desc = (
-                f"qty: {ev.get('qty')}, status: {ev.get('status')}, "
-                f"filled: {ev.get('fill_status', {}).get('filled', '?')}"
-            )
+            desc = f"qty: {ev.get('qty')}, status: {ev.get('status')}, filled: {ev.get('fill_status', {}).get('filled', '?')}"
             fields = {}
             if "error" in ev:
                 fields["error"] = ev["error"]
             if "error_type" in ev:
                 fields["error_type"] = ev["error_type"]
-            post_discord_embed(
-                webhook, title, desc,
-                color=3066993 if ev.get("status") in ("ok", "success") else 15158332,
-                fields=fields,
-            )
+            post_discord_embed(webhook, title, desc, color=3066993 if ev.get("status") in ("ok", "success") else 15158332, fields=fields)
 
         # === EXECUTE ===
         if args.paper or g.get("execution_broker", "none") == "none":
@@ -703,17 +666,7 @@ def main():
             _slack("Paper run complete", {"trades": len(plan)})
         else:
             # Live (CoinSpot V2)
-            res = place_plan_coinspot(
-                plan, prices, quote,
-                use_quote=args.coinspot_use_quote,
-                threshold_pct=thresh,
-                direction=args.coinspot_direction,
-                mode=args.mode,
-                max_trades=args.max_trades,
-                notify=notify_embed if args.notify and webhook else None,
-                order_timeout_sec=int(args.order_timeout_sec),
-                poll_interval_sec=int(args.poll_interval_sec),
-            )
+            res = place_plan_coinspot(plan, prices, quote, use_quote=args.coinspot_use_quote, threshold_pct=thresh, direction=args.coinspot_direction, mode=args.mode, max_trades=args.max_trades, notify=notify_embed if args.notify and webhook else None, order_timeout_sec=int(args.order_timeout_sec), poll_interval_sec=int(args.poll_interval_sec))
             updated = current.copy()
             for _, r in plan.iterrows():
                 if r["side"] == "BUY":
@@ -762,3 +715,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+

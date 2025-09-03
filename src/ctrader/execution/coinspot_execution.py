@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import os
 import time
-from typing import Optional, Callable, Dict, Any
+from typing import Any, Callable, Dict, Optional
 
 import pandas as pd
 
-from ctrader.data_providers.coinspot_v2 import CoinSpotV2
 from ctrader.data_providers.coinspot import fetch_buy_price, fetch_sell_price
+from ctrader.data_providers.coinspot_v2 import CoinSpotV2
 
 
 def _bool_env(name: str, default: bool = False) -> bool:
@@ -148,7 +148,11 @@ def place_plan_coinspot(
         rate: float | None = None
         if use_quote:
             try:
-                rate = fetch_buy_price(sym, mkt) if side == "BUY" else fetch_sell_price(sym, mkt)
+                rate = (
+                    fetch_buy_price(sym, mkt)
+                    if side == "BUY"
+                    else fetch_sell_price(sym, mkt)
+                )
             except Exception:
                 rate = None
 
@@ -165,7 +169,9 @@ def place_plan_coinspot(
                         direction=(direction or "UP"),
                     )
                 else:
-                    used_rate = rate if rate is not None else float(prices.get(sym, 0.0))
+                    used_rate = (
+                        rate if rate is not None else float(prices.get(sym, 0.0))
+                    )
                     resp = client.place_market_buy(
                         sym, amount=qty, rate=used_rate, markettype=mkt
                     )
@@ -180,7 +186,9 @@ def place_plan_coinspot(
                         direction=(direction or "DOWN"),
                     )
                 else:
-                    used_rate = rate if rate is not None else float(prices.get(sym, 0.0))
+                    used_rate = (
+                        rate if rate is not None else float(prices.get(sym, 0.0))
+                    )
                     resp = client.place_market_sell(
                         sym, amount=qty, rate=used_rate, markettype=mkt
                     )

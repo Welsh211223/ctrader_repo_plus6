@@ -1,5 +1,6 @@
 # --- make sure "src" is on sys.path so `ctrader` imports work anywhere ---
-import sys, os
+import os
+import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve()
@@ -9,20 +10,26 @@ if str(SRC_DIR) not in sys.path:
 # ------------------------------------------------------------------------
 
 from dotenv import load_dotenv
+
 load_dotenv()
 
-import streamlit as st
-import pandas as pd
+import json
+
 import numpy as np
+import pandas as pd
+import streamlit as st
 
 from ctrader.analytics import risk_report
 from ctrader.data_providers.coinspot_v2 import CoinSpotV2
-import json
 
-st.set_page_config(page_title="Crypto Trader Dashboard", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(
+    page_title="Crypto Trader Dashboard",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
 st.title("📊 Crypto Trader Dashboard")
 
-BASE = HERE.parents[2] / "data"   # project_root\data
+BASE = HERE.parents[2] / "data"  # project_root\data
 pool = st.selectbox("Pool", ["conservative", "aggressive"])
 
 # ------------------- Run status (from runs.jsonl) -------------------
@@ -48,7 +55,9 @@ if latest is not None and len(latest) == 1:
     cols[2].metric("Reserve %", f"{float(r.get('reserve_pct', 0.0)):.1f}%")
     cols[3].metric("Cap %", f"{float(r.get('cap_pct', 0.0)):.1f}%")
     cols[4].metric("Trades", int(r.get("trades_selected", 0)))
-    st.caption(f"Cap mode: {r.get('cap_mode','')}, priority: {r.get('cap_priority','')}, reasons: {', '.join(r.get('cap_reasons', [])) or 'none'}")
+    st.caption(
+        f"Cap mode: {r.get('cap_mode','')}, priority: {r.get('cap_priority','')}, reasons: {', '.join(r.get('cap_reasons', [])) or 'none'}"
+    )
 else:
     st.info("No run log yet. Run the trader to populate `data\\logs\\runs.jsonl`.")
 
@@ -57,7 +66,7 @@ st.subheader("Equity")
 eq_fp = BASE / f"equity_{pool}.csv"
 if eq_fp.exists():
     df_eq = pd.read_csv(eq_fp)
-    if not df_eq.empty and {"ts","equity"} <= set(df_eq.columns):
+    if not df_eq.empty and {"ts", "equity"} <= set(df_eq.columns):
         st.line_chart(df_eq.set_index("ts")["equity"])
     else:
         st.info("Equity file is empty.")
@@ -68,11 +77,15 @@ else:
 st.subheader("Drawdown")
 if eq_fp.exists():
     df_eq = pd.read_csv(eq_fp)
-    if not df_eq.empty and {"ts","equity"} <= set(df_eq.columns):
+    if not df_eq.empty and {"ts", "equity"} <= set(df_eq.columns):
         eq = df_eq["equity"].astype(float).to_numpy()
         peaks = np.maximum.accumulate(eq)
         dd = (eq / np.where(peaks == 0, np.nan, peaks)) - 1.0
-        st.line_chart(pd.DataFrame({"ts": df_eq["ts"], "drawdown": dd}).set_index("ts")["drawdown"])
+        st.line_chart(
+            pd.DataFrame({"ts": df_eq["ts"], "drawdown": dd}).set_index("ts")[
+                "drawdown"
+            ]
+        )
 
 # ------------------- Trades -------------------
 st.subheader("Trades (last 200)")
@@ -92,7 +105,7 @@ try:
     rs = sorted((BASE / "run_summaries").glob(f"run_{pool}_*_trades.csv"))
     if rs:
         last = pd.read_csv(rs[-1])
-        if not last.empty and {"ticker","est_value"} <= set(last.columns):
+        if not last.empty and {"ticker", "est_value"} <= set(last.columns):
             alloc = last.groupby("ticker", as_index=False)["est_value"].sum()
             total = alloc["est_value"].sum()
             if total > 0:
@@ -122,14 +135,23 @@ if ak and sk:
     except Exception as e:
         st.warning(f"RO balances error: {e}")
 else:
-    st.caption("Set COINSPOT_API_KEY / COINSPOT_API_SECRET in your .env to show balances.")
+    st.caption(
+        "Set COINSPOT_API_KEY / COINSPOT_API_SECRET in your .env to show balances."
+    )
 
 # ------------------- Risk report -------------------
 st.subheader("Risk Report")
 try:
     cats = {
-        "BTC": "core", "ETH": "core", "SOL": "core", "AVAX": "core", "XRP": "core",
-        "HBAR": "ai", "QNT": "ai", "DOGE": "meme", "SHIB": "meme",
+        "BTC": "core",
+        "ETH": "core",
+        "SOL": "core",
+        "AVAX": "core",
+        "XRP": "core",
+        "HBAR": "ai",
+        "QNT": "ai",
+        "DOGE": "meme",
+        "SHIB": "meme",
     }
     rr_fp = risk_report(pool, cats, BASE)
     st.dataframe(pd.read_csv(rr_fp))
@@ -147,7 +169,11 @@ if sig_dir.exists():
             sdf = pd.read_csv(last_sig)
             st.dataframe(sdf)
             if all(c in sdf.columns for c in ("price_usd", "sma200")) and len(sdf) > 0:
-                breadth = float((sdf["price_usd"] > sdf["sma200"]).sum()) * 100.0 / max(1, len(sdf))
+                breadth = (
+                    float((sdf["price_usd"] > sdf["sma200"]).sum())
+                    * 100.0
+                    / max(1, len(sdf))
+                )
                 st.metric("Breadth (% above SMA200)", f"{breadth:.1f}%")
         except Exception as e:
             st.warning(f"Could not read signals: {e}")

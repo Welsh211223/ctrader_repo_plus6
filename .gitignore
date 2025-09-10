@@ -16,3 +16,6 @@ ni .\data\.keep -Force | Out-Null
 reports_*/
 reports_*
 
+
+# local secrets
+.env

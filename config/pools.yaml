@@ -1,2 +1,54 @@
 global:
-  execution_broker: none
+  quote_currency: AUD
+  fee_bps: 10            # 0.10%
+  slippage_bps: 5        # 0.05%
+  webhook_url: ""        # optional (Discord)
+
+execution:
+  min_order_value_default: 5.0
+  qty_precision:
+    BTC: 6
+    ETH: 6
+    SOL: 6
+    AVAX: 6
+    HBAR: 6
+    QNT: 6
+    DOGE: 0
+    SHIB: 0
+    XRP: 2
+  turnover_cap_pct: 15.0
+  turnover_cap_mode: gross          # gross | net
+
+pools:
+  conservative:
+    assets:
+      BTC: 0.40
+      ETH: 0.25
+      SOL: 0.10
+      XRP: 0.10
+      DOGE: 0.05
+      AVAX: 0.05
+      HBAR: 0.03
+      QNT: 0.02
+    categories: {}
+    drift_threshold_pct: 2.0
+    cash_buffer_pct: 0.0
+
+  aggressive:
+    assets:
+      BTC: 0.25
+      ETH: 0.20
+      SOL: 0.20
+      AVAX: 0.15
+      DOGE: 0.10
+      SHIB: 0.05
+      XRP: 0.05
+    categories: {}
+    drift_threshold_pct: 2.0
+    cash_buffer_pct: 0.0
+
+risk_off:
+  absolute_momentum:
+    enabled: true
+    ref_symbol: BTC
+    sma_days: 200

@@ -1,0 +1,12 @@
+﻿
+===== black_check =====
+black --check .
+
+cmd : 'black' is not recognized as an internal or external command,
+At line:4 char:3
++   cmd /c $cmd 2>&1 | Out-File "$reports\$name.txt" -Append -Encoding  ...
++   ~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ('black' is not ...ternal command,:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+operable program or batch file.

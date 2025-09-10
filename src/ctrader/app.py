@@ -1,7 +1,16 @@
 # --- make sure "src" is on sys.path so `ctrader` imports work anywhere ---
+import json
 import os
 import sys
 from pathlib import Path
+
+import numpy as np
+import pandas as pd
+import streamlit as st
+from dotenv import load_dotenv
+
+from ctrader.analytics import risk_report
+from ctrader.data_providers.coinspot_v2 import CoinSpotV2
 
 HERE = Path(__file__).resolve()
 SRC_DIR = HERE.parents[1]  # ...\src
@@ -9,25 +18,16 @@ if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 # ------------------------------------------------------------------------
 
-from dotenv import load_dotenv
 
 load_dotenv()
 
-import json
-
-import numpy as np
-import pandas as pd
-import streamlit as st
-
-from ctrader.analytics import risk_report
-from ctrader.data_providers.coinspot_v2 import CoinSpotV2
 
 st.set_page_config(
     page_title="Crypto Trader Dashboard",
     layout="wide",
     initial_sidebar_state="expanded",
 )
-st.title("📊 Crypto Trader Dashboard")
+st.title("ðŸ“Š Crypto Trader Dashboard")
 
 BASE = HERE.parents[2] / "data"  # project_root\data
 pool = st.selectbox("Pool", ["conservative", "aggressive"])
@@ -56,7 +56,7 @@ if latest is not None and len(latest) == 1:
     cols[3].metric("Cap %", f"{float(r.get('cap_pct', 0.0)):.1f}%")
     cols[4].metric("Trades", int(r.get("trades_selected", 0)))
     st.caption(
-        f"Cap mode: {r.get('cap_mode','')}, priority: {r.get('cap_priority','')}, reasons: {', '.join(r.get('cap_reasons', [])) or 'none'}"
+        f"Cap mode: {r.get('cap_mode', '')}, priority: {r.get('cap_priority', '')}, reasons: {', '.join(r.get('cap_reasons', [])) or 'none'}"
     )
 else:
     st.info("No run log yet. Run the trader to populate `data\\logs\\runs.jsonl`.")
@@ -178,6 +178,6 @@ if sig_dir.exists():
         except Exception as e:
             st.warning(f"Could not read signals: {e}")
     else:
-        st.info("No signals yet—run the trader once.")
+        st.info("No signals yetâ€”run the trader once.")
 else:
     st.info("No signals directory yet.")

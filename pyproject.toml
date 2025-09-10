@@ -4,8 +4,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ctrader"
-version = "0.2.0"
+version = "0.0.0"
+description = "Crypto Trader CLI + library"
 requires-python = ">=3.10"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]

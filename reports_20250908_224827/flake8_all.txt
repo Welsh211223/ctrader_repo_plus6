@@ -1,0 +1,12 @@
+﻿
+===== flake8_all =====
+flake8 . --show-source --statistics
+
+cmd : 'flake8' is not recognized as an internal or external command,
+At line:4 char:3
++   cmd /c $cmd 2>&1 | Out-File "$reports\$name.txt" -Append -Encoding  ...
++   ~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ('flake8' is not...ternal command,:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+operable program or batch file.

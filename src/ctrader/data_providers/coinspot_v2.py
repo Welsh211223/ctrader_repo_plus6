@@ -8,8 +8,12 @@ import time
 from dataclasses import dataclass
 
 import requests
-from tenacity import (retry, retry_if_exception_type, stop_after_attempt,
-                      wait_exponential)
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 API_BASE = "https://www.coinspot.com.au/api/v2"
 RO_BASE = "https://www.coinspot.com.au/api/v2/ro"

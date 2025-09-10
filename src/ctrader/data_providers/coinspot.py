@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import requests
-from tenacity import (retry, retry_if_exception_type, stop_after_attempt,
-                      wait_exponential)
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 PUB_BASE = "https://www.coinspot.com.au/pubapi/v2"
 

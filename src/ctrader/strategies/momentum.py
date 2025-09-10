@@ -2,8 +2,7 @@ from __future__ import annotations
 
 from typing import Dict, List
 
-from ctrader.data_providers.marketdata import (fetch_fx_usd_to_aud,
-                                               fetch_history_daily)
+from ctrader.data_providers.marketdata import fetch_fx_usd_to_aud, fetch_history_daily
 
 
 def _price_at_offset(series: list[float], offset_days: int) -> float | None:

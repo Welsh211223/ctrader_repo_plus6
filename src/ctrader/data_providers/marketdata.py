@@ -4,8 +4,12 @@ import os
 from pathlib import Path
 
 import requests
-from tenacity import (retry, retry_if_exception_type, stop_after_attempt,
-                      wait_exponential)
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 from ctrader.utils.cache import JsonDiskCache
 

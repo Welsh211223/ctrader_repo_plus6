@@ -6,8 +6,7 @@ from pathlib import Path
 import pandas as pd
 
 from ctrader.config_loader import load_pools_config
-from ctrader.data_providers.marketdata import (fetch_fx_usd_to_aud,
-                                               fetch_history_daily)
+from ctrader.data_providers.marketdata import fetch_fx_usd_to_aud, fetch_history_daily
 from ctrader.risk.rebalancer import create_rebalance_plan
 from ctrader.risk.risk_manager import RiskRules, enforce_caps
 from ctrader.strategies.inverse_vol import inverse_vol_weights

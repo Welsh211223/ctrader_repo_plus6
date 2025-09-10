@@ -3,8 +3,7 @@ from __future__ import annotations
 import math
 from typing import Dict
 
-from ctrader.data_providers.marketdata import (fetch_fx_usd_to_aud,
-                                               fetch_history_daily)
+from ctrader.data_providers.marketdata import fetch_fx_usd_to_aud, fetch_history_daily
 
 
 def _sma(prices: list[float], window: int) -> float:

@@ -19,3 +19,6 @@ reports_*
 
 # local secrets
 .env
+
+# allow documented example
+!.env.example

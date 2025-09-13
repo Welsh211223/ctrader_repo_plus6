@@ -22,3 +22,23 @@ reports_*
 
 # allow documented example
 !.env.example
+
+.pytest_cache/
+dist/
+build/
+
+# --- Python caches/build ---
+*.egg-info/
+# --- Virtual envs ---
+# --- IDE / OS ---
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+# --- Local config & secrets ---
+# --- Generated / workspace ---
+.archive/
+.tmp_*.py
+*.bak
+*.old
+*.broken

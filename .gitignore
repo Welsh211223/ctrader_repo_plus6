@@ -41,4 +41,6 @@ Thumbs.db
 .tmp_*.py
 *.bak
 *.old
-*.broken
+*.broken.tmp_*.py
+.tmp*.py
+*.tmp.py

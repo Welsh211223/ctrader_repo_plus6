@@ -1,4 +1,4 @@
-﻿
+
 ![CI](https://github.com/Welsh211223/ctrader_repo_plus6/actions/workflows/ci.yml/badge.svg)
 # Crypto Trader â€” CoinSpot + Paper
 All-in-one scaffold: V2 live trading (guarded), paper simulator, robust signals (SMA, 12â€“1 momentum, inverse-vol), caching, backtests, Streamlit dashboard, scheduler, healthcheck, risk reports, Discord alerts.
@@ -36,4 +36,3 @@ streamlit run src/ctrader/app.py
   Forces `COINSPOT_LIVE_DANGEROUS=false` in the child process so nothing can place live orders:
   ```powershell
   .\tools\safe-run.ps1 .\.venv\Scripts\python.exe -m ctrader.backtest
-

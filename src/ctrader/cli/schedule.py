@@ -1,19 +1,20 @@
 from __future__ import annotations
 
-# path shim
-import sys
-from pathlib import Path
-
-SRC_DIR = Path(__file__).resolve().parents[3]
-if str(SRC_DIR) not in sys.path:
-    sys.path.insert(0, str(SRC_DIR))
-
 import argparse
 import shlex
 import subprocess
+import sys
 import time
+from pathlib import Path
+
+# Point to the /src directory: .../src/ctrader/cli/schedule.py -> parents[2] is /src
+SRC_DIR = Path(__file__).resolve().parents[2]
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
 
 
+# Point to the /src directory: .../src/ctrader/cli/schedule.py -> parents[2] is /src
+# path shim
 def main():
     ap = argparse.ArgumentParser(description="Simple scheduler for ctrader.cli.trade")
     ap.add_argument("--interval-sec", type=int, default=1800, help="How often to run.")

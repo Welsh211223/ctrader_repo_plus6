@@ -44,3 +44,11 @@ Thumbs.db
 *.broken.tmp_*.py
 .tmp*.py
 *.tmp.py
+
+/.idea/
+# --- secrets noise (ignore) ---
+.archive/
+*.bak
+.env
+.env.*
+!.env.example

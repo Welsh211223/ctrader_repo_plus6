@@ -6,3 +6,5 @@
 *.md   text eol=lf
 *.ps1  text eol=crlf
 *.bat  text eol=crlf
+
+.secrets.baseline text eol=lf

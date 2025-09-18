@@ -8,3 +8,7 @@
 *.bat  text eol=crlf
 
 .secrets.baseline text eol=lf
+* text=auto eol=lf
+*.ps1 text eol=lf
+*.psm1 text eol=lf
+*.bat text eol=crlf

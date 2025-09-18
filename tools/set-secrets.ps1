@@ -89,5 +89,3 @@ Next:
  - Optional quick check:  powershell -ExecutionPolicy Bypass -File .\tools\smoke-coinspot.ps1
  - If you ever pasted keys in terminals/chats, rotate them from your exchange dashboard.
 "@ | Write-Host
-
-

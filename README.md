@@ -32,7 +32,7 @@ streamlit run src/ctrader/app.py
 
 ## Dry-run & Preflight
 
-- **Dry-run any command (paper-safe)**  
+- **Dry-run any command (paper-safe)**
   Forces `COINSPOT_LIVE_DANGEROUS=false` in the child process so nothing can place live orders:
   ```powershell
   .\tools\safe-run.ps1 .\.venv\Scripts\python.exe -m ctrader.backtest

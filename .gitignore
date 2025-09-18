@@ -37,3 +37,4 @@ dist/
 .pytest_cache/
 *.old
 ni .\data\.keep -Force | Out-Null
+ctrader_repo_plus6/

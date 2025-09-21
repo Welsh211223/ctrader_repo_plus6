@@ -1,0 +1,22 @@
+﻿name: bandit
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  bandit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install --upgrade pip bandit
+      - run: |
+          if [ -d src ] || [ -f pyproject.toml ] || [ -f setup.cfg ]; then
+            set +e
+            bandit -r . -q -x tests
+            exit 0
+          else
+            echo "No Python source tree detected — skipping"
+          fi

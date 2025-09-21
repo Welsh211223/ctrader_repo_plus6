@@ -1,46 +1,90 @@
-name: lint
-on: [push, pull_request]
+﻿name: lint
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - "**.py"
+      - ".github/workflows/lint.yml"
+      - "pyproject.toml"
+      - ".flake8"
+  pull_request:
+    branches: [ main ]
+    paths:
+      - "**.py"
+      - ".github/workflows/lint.yml"
+      - "pyproject.toml"
+      - ".flake8"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: lint-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
-  black:
+  setup:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with: { python-version: "3.11" }
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - name: Install tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install black ruff isort detect-secrets
+  black:
+    needs: setup
+    runs-on: ubuntu-latest
+    permissions: { contents: read }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11", cache: "pip" }
       - run: pip install black
       - run: black --check .
   ruff:
+    needs: setup
     runs-on: ubuntu-latest
+    permissions: { contents: read }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with: { python-version: "3.11" }
+        with: { python-version: "3.11", cache: "pip" }
       - run: pip install ruff
       - run: ruff check .
   ruff-format:
+    needs: setup
     runs-on: ubuntu-latest
+    permissions: { contents: read }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with: { python-version: "3.11" }
+        with: { python-version: "3.11", cache: "pip" }
       - run: pip install ruff
       - run: ruff format --check .
   isort:
+    needs: setup
     runs-on: ubuntu-latest
+    permissions: { contents: read }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with: { python-version: "3.11" }
+        with: { python-version: "3.11", cache: "pip" }
       - run: pip install isort
       - run: isort --check-only .
   detect-secrets:
+    needs: setup
     runs-on: ubuntu-latest
+    permissions: { contents: read }
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
       - uses: actions/setup-python@v5
-        with: { python-version: "3.11" }
+        with: { python-version: "3.11", cache: "pip" }
       - run: pip install detect-secrets
       - run: |
-          if [ ! -f ".secrets.baseline" ]; then echo "Missing .secrets.baseline"; exit 1; fi
+          if [ ! -f ".secrets.baseline" ]; then
+            echo "Missing .secrets.baseline"; exit 1;
+          fi
           detect-secrets scan --baseline .secrets.baseline

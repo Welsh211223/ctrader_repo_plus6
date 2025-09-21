@@ -1,21 +1,15 @@
 ﻿name: codeql
 on:
-  push:
-    branches: [ main ]
-  pull_request:
+  push: { branches: [ "main" ] }
+  pull_request: { branches: [ "main" ] }
 permissions:
   contents: read
   security-events: write
 jobs:
   analyze:
     runs-on: ubuntu-latest
-    permissions:
-      actions: read
-      contents: read
-      security-events: write
     steps:
       - uses: actions/checkout@v4
       - uses: github/codeql-action/init@v3
-        with:
-          languages: python
+        with: { languages: python }
       - uses: github/codeql-action/analyze@v3

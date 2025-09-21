@@ -2,20 +2,31 @@
 on:
   push:
     branches: [ main ]
+    paths:
+      - "**"
+      - "!.gitmodules"
   pull_request:
+    branches: [ main ]
+    paths:
+      - "**"
+      - "!.gitmodules"
+  workflow_dispatch:
+permissions:
+  contents: read
 jobs:
   size-check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with: { fetch-depth: 0 }
+        with:
+          fetch-depth: 0
       - name: Fail if any file > 50MB not in LFS
         shell: bash
         run: |
-          big_files=\
-          if [ -n "\" ]; then
-            echo "Large files found in repo (not LFS tracked):"
-            echo "\"
+          big_files=$(git ls-tree -r -l HEAD | awk '$4 > 52428800 {print $5}')
+          if [ -n "$big_files" ]; then
+            echo "Large files found not tracked by LFS:"
+            echo "$big_files"
             echo "::error::Commit large files via Git LFS (>=50MB)."
             exit 1
           fi

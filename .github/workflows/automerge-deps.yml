@@ -14,6 +14,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Harden Runner
+        uses: step-security/harden-runner@v3
+        with:
+          egress-policy: block
       - name: Enable auto-merge
         run: gh pr merge --auto --squash "$PR"
         env:

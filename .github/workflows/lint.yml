@@ -2,89 +2,119 @@
 on:
   push:
     branches: [ main ]
-    paths:
-      - "**.py"
-      - ".github/workflows/lint.yml"
-      - "pyproject.toml"
-      - ".flake8"
   pull_request:
-    branches: [ main ]
-    paths:
-      - "**.py"
-      - ".github/workflows/lint.yml"
-      - "pyproject.toml"
-      - ".flake8"
-  workflow_dispatch:
 permissions:
   contents: read
 concurrency:
   group: lint-${{ github.ref }}
   cancel-in-progress: true
+
 jobs:
-  setup:
+  black:
     runs-on: ubuntu-latest
     steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@v3
+        with:
+          egress-policy: block
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install --upgrade pip black
+      - run: black --check .
+
+  ruff:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@v3
+        with:
+          egress-policy: block
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install --upgrade pip ruff
+      - run: ruff check .
+
+  ruff-format:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@v3
+        with:
+          egress-policy: block
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install --upgrade pip ruff
+      - run: ruff format --check .
+
+  isort:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@v3
+        with:
+          egress-policy: block
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install --upgrade pip isort
+      - run: isort --check-only .
+
+  detect-secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@v3
+        with:
+          egress-policy: block
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install --upgrade pip detect-secrets
+      - name: Scan with detect-secrets (baseline required)
+        run: |
+          if [ ! -f ".secrets.baseline" ]; then
+            echo "Missing .secrets.baseline"; exit 1;
+          fi
+          detect-secrets scan --baseline .secrets.baseline
+
+  pip-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@v3
+        with:
+          egress-policy: block
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: "pip"
-      - name: Install tools
+          cache-dependency-path: |
+            requirements*.txt
+            pyproject.toml
+      - run: python -m pip install --upgrade pip pip-audit
+      - name: Advisory audit (does not fail build)
         run: |
-          python -m pip install --upgrade pip
-          pip install black ruff isort detect-secrets
-  black:
-    needs: setup
-    runs-on: ubuntu-latest
-    permissions: { contents: read }
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: { python-version: "3.11", cache: "pip" }
-      - run: pip install black
-      - run: black --check .
-  ruff:
-    needs: setup
-    runs-on: ubuntu-latest
-    permissions: { contents: read }
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: { python-version: "3.11", cache: "pip" }
-      - run: pip install ruff
-      - run: ruff check .
-  ruff-format:
-    needs: setup
-    runs-on: ubuntu-latest
-    permissions: { contents: read }
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: { python-version: "3.11", cache: "pip" }
-      - run: pip install ruff
-      - run: ruff format --check .
-  isort:
-    needs: setup
-    runs-on: ubuntu-latest
-    permissions: { contents: read }
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: { python-version: "3.11", cache: "pip" }
-      - run: pip install isort
-      - run: isort --check-only .
-  detect-secrets:
-    needs: setup
-    runs-on: ubuntu-latest
-    permissions: { contents: read }
-    steps:
-      - uses: actions/checkout@v4
-        with: { fetch-depth: 0 }
-      - uses: actions/setup-python@v5
-        with: { python-version: "3.11", cache: "pip" }
-      - run: pip install detect-secrets
-      - run: |
-          if [ ! -f ".secrets.baseline" ]; then
-            echo "Missing .secrets.baseline"; exit 1;
+          if [ -f requirements.txt ]; then
+            set +e
+            pip-audit -r requirements.txt
+            echo "pip-audit exit code: $?"
+            exit 0
+          elif [ -f pyproject.toml ]; then
+            set +e
+            pip-audit
+            echo "pip-audit exit code: $?"
+            exit 0
+          else
+            echo "No requirements/pyproject — skipping"
           fi
-          detect-secrets scan --baseline .secrets.baseline

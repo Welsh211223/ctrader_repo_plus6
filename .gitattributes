@@ -1,1 +1,17 @@
-* text=auto
+﻿* text=auto eol=lf
+*.ps1 text eol=lf
+
+# common binaries
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.gz binary
+*.7z binary
+*.rar binary
+
+# If you ever introduce LFS, uncomment and track large types:
+# *.bin filter=lfs diff=lfs merge=lfs -text

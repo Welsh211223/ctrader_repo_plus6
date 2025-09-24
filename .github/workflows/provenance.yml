@@ -1,0 +1,32 @@
+﻿name: provenance
+on:
+  push:
+    tags: [ "v*" ]
+permissions:
+  contents: write
+  id-token: write
+concurrency:
+  group: provenance-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  attest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Harden Runner
+        uses: step-security/harden-runner@v3
+        with:
+          egress-policy: block
+      - name: Find subject files
+        id: find
+        shell: bash
+        run: |
+          if [ -d dist ]; then echo "path=dist/**" >> "$GITHUB_OUTPUT"; exit 0; fi
+          if compgen -G "*.whl" > /dev/null; then echo "path=*.whl" >> "$GITHUB_OUTPUT"; exit 0; fi
+          if compgen -G "*.zip" > /dev/null; then echo "path=*.zip" >> "$GITHUB_OUTPUT"; exit 0; fi
+          echo "path=" >> "$GITHUB_OUTPUT"
+      - name: Attest build provenance (if any artifacts)
+        if: steps.find.outputs.path != ''
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: ${{ steps.find.outputs.path }}

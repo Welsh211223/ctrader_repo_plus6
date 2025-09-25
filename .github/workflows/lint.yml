@@ -1,0 +1,14 @@
+on:
+  workflow_dispatch:
+  push:
+    branches: [ egress-allowlist-lock, main ]
+    paths:
+      - ".github/workflows/**"
+      - "src/**"
+      - "tests/**"
+      - "pyproject.toml"
+      - "requirements*.txt"
+      - "setup.cfg"
+      - "pre-commit-config.yaml"
+  pull_request:
+    branches: [ main ]

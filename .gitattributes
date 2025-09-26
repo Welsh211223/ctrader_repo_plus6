@@ -1,4 +1,4 @@
-﻿* text=auto eol=lf
+* text=auto eol=lf
 *.ps1 text eol=lf
 
 # common binaries
@@ -15,3 +15,5 @@
 
 # If you ever introduce LFS, uncomment and track large types:
 # *.bin filter=lfs diff=lfs merge=lfs -text
+*.yml  text eol=lf
+*.yaml text eol=lf

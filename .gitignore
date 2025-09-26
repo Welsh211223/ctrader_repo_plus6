@@ -38,3 +38,11 @@ dist/
 *.old
 ni .\data\.keep -Force | Out-Null
 ctrader_repo_plus6/
+
+# CI artifacts
+job-*.log
+.ci-helper.json
+
+# CI artifacts
+job-*.log
+.ci-helper.json

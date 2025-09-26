@@ -1,4 +1,4 @@
-﻿name: lint
+name: lint
 on:
   workflow_dispatch:
   push:
@@ -10,7 +10,7 @@ on:
       - "requirements*.txt"
       - "**/*.py"
   pull_request:
-    branches: [ main, egress-allowlist-lock ]
+    branches: [ main ]
 
 permissions:
   contents: read
@@ -19,27 +19,32 @@ concurrency:
   group: lint-${{ github.ref }}
   cancel-in-progress: true
 
-defaults:
-  run:
-    shell: bash
-
-env:
-  PIP_DISABLE_PIP_VERSION_CHECK: "1"
-  PYTHONUNBUFFERED: "1"
-
 jobs:
   lint:
-    timeout-minutes: 20
     runs-on: ubuntu-latest
     steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@f4a75cfd619ee5ce8d5b864b0d183aff3c69b55a
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            api.github.com:443
+            github.com:443
+            uploads.github.com:443
+            raw.githubusercontent.com:443
+            objects.githubusercontent.com:443
+            pypi.org:443
+            files.pythonhosted.org:443
+
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: '3.12'
           cache: pip
 
       - name: Cache pre-commit
-        uses: actions/cache@v4
+        uses: actions/cache@v3
         with:
           path: |
             ~/.cache/pre-commit
@@ -50,12 +55,9 @@ jobs:
 
       - name: Install deps
         run: |
-          set -euo pipefail
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           pip install pre-commit
 
       - name: Run pre-commit
-        run: |
-          set -euo pipefail
-          pre-commit run --all-files
+        run: pre-commit run --all-files

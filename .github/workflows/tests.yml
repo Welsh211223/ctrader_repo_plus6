@@ -1,7 +1,1 @@
-﻿name: tests
-on:
-  workflow_dispatch:
-  push:
-    branches: [ main, egress-allowlist-lock ]
-  pull_request:
-    branches: [ main ]
+﻿

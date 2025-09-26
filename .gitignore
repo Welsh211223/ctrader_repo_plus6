@@ -46,3 +46,8 @@ job-*.log
 # CI artifacts
 job-*.log
 .ci-helper.json
+
+# CI artifacts / helpers
+# Workflow backups + helper scripts
+*.yml.bak.*
+setup-ci-*.ps1

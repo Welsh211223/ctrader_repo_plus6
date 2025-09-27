@@ -67,3 +67,19 @@ __pycache__/
 *.pyd
 .venv/
 *.log
+
+# Local secrets & env
+.env
+.env.*
+!.env.example
+
+# Local configs
+config/*.local.yaml
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+*.log

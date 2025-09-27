@@ -2,9 +2,9 @@
 * text=auto eol=lf
 
 # GitHub Actions & YAML should always be LF
-*.yml text eol=lf
+*.yml  text eol=lf
 *.yaml text eol=lf
 
-# Keep Windows batch files CRLF if you have any
+# Keep Windows batch files CRLF if needed
 *.bat eol=crlf
 *.cmd eol=crlf

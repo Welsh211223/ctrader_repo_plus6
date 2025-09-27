@@ -1,4 +1,4 @@
-﻿# allow documented example
+# allow documented example
 .env.*
 .venv/
 .archive/
@@ -51,3 +51,19 @@ job-*.log
 # Workflow backups + helper scripts
 *.yml.bak.*
 setup-ci-*.ps1
+
+# Local secrets & env
+.env
+.env.*
+!.env.example
+
+# Local configs
+config/*.local.yaml
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+*.log

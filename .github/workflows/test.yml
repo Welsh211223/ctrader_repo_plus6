@@ -21,8 +21,13 @@ jobs:
       - name: Harden Runner
         uses: step-security/harden-runner@v3
         with:
-          egress-policy: audit
-      - uses: actions/checkout@v4
+          egress-policy: block
+      
+          allowed-endpoints: >
+            pypi.org:443
+            files.pythonhosted.org:443
+            github.com:443
+            api.github.com:443- uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.10"

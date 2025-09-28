@@ -99,3 +99,5 @@ __pycache__/
 *.pyd
 .venv/
 *.log
+
+z_archive*/

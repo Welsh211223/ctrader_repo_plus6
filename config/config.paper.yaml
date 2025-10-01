@@ -1,0 +1,10 @@
+mode: paper
+risk:
+  max_risk_pct: 1
+order:
+  max_position_value_usd: 50
+  slippage_bps: 5
+  fee_bps: 10
+exchange:
+  name: "${EXCHANGE}"
+  base_url: "${BASE_URL}"   # testnet URL

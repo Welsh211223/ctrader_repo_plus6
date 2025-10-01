@@ -1,0 +1,40 @@
+universe: [BTC, ETH]
+strategy: static
+static_weights:
+  BTC: 0.60
+  ETH: 0.40
+holdings:
+  - { symbol: BTC, amount: 0.005 }
+  - { symbol: ETH, amount: 0.50 }
+prices:
+  BTC: 100000
+  ETH: 4000
+drift_threshold: 0.01
+min_trade_value: 30.0
+fee_rate: 0.001
+# --- live prices example (uncomment to use) ---
+# price_source: coingecko
+# coingecko:
+#   vs_currency: aud
+#   ids:
+#     BTC: bitcoin
+#     ETH: ethereum
+
+# --- risk parity example (uncomment to use) ---
+# strategy: risk_parity
+# history:
+#   BTC: [95000, 96000, 97000, 98000, 99000, 100000, 101000]
+#   ETH: [3600, 3650, 3620, 3700, 3800, 3900, 4000]
+
+# --- per-exchange style constraints (examples) ---
+constraints:
+  default:
+    min_notional: 30
+    min_qty: 0.000001
+    qty_step: 0.000001
+  BTC:
+    min_qty: 0.00001
+    qty_step: 0.000001
+  ETH:
+    min_qty: 0.0001
+    qty_step: 0.0001

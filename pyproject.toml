@@ -1,11 +1,7 @@
-[build-system]
-requires = ["setuptools>=68", "wheel"]
-build-backend = "setuptools.build_meta"
+[tool.black]
+line-length = 88
+target-version = ["py311","py312","py313"]
 
-[project]
-name = "ctrader"
-version = "0.2.0"
-requires-python = ">=3.10"
-
-[tool.setuptools.packages.find]
-where = ["src"]
+[tool.isort]
+profile = "black"
+line_length = 88

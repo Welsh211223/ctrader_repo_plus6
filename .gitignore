@@ -1,15 +1,107 @@
-# verify these lines exist in .gitignore
-@"
+# allow documented example
+.env.*
 .venv/
-__pycache__/
+.archive/
+# local secrets
+.vscode/
+"@ | Out-File -Encoding utf8 .\.gitignore
+# --- IDE / OS ---
+*.bak
+# --- Python caches/build ---
+reports_*/
+*.tmp.py
+*.egg-info/
+# --- Generated / workspace ---
+reports_*
 *.py[cod]
+!.env.example
+.idea/
+!data/.keep
+__pycache__/
+*.broken.tmp_*.py
+.DS_Store
+build/
+Thumbs.db
+# --- Virtual envs ---
+.tmp*.py
+# verify these lines exist in .gitignore
+# keep the data folder structure without tracking files
+.env
+/.idea/
+@"
+data/
+# --- Local config & secrets ---
+# --- secrets noise (ignore) ---
+dist/
+.tmp_*.py
+.pytest_cache/
+*.old
+ni .\data\.keep -Force | Out-Null
+ctrader_repo_plus6/
 
+# CI artifacts
+job-*.log
+.ci-helper.json
+
+# CI artifacts
+job-*.log
+.ci-helper.json
+
+# CI artifacts / helpers
+# Workflow backups + helper scripts
+*.yml.bak.*
+setup-ci-*.ps1
+
+# Local secrets & env
 .env
 .env.*
+!.env.example
 
-data/
-!data/.keep
-"@ | Out-File -Encoding utf8 .\.gitignore
+# Local configs
+config/*.local.yaml
 
-# keep the data folder structure without tracking files
-ni .\data\.keep -Force | Out-Null
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+*.log
+
+# Local secrets & env
+.env
+.env.*
+!.env.example
+
+# Local configs
+config/*.local.yaml
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+*.log
+
+# Local secrets & env
+.env
+.env.*
+!.env.example
+
+# Local configs
+config/*.local.yaml
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+*.log
+
+z_archive*/
+
+tools/repair-operate-ctrader.ps1
+
+tools/fix-operate-ctrader-ascii.ps1

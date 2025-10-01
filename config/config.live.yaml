@@ -1,0 +1,10 @@
+mode: live
+risk:
+  max_risk_pct: 0.5
+order:
+  max_position_value_usd: 25
+  slippage_bps: 10
+  fee_bps: 12
+exchange:
+  name: "${EXCHANGE}"
+  base_url: "${BASE_URL}"   # live URL

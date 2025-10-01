@@ -1,1 +1,10 @@
-* text=auto
+# Normalize text to LF in repo; checkout uses platform defaults unless overridden.
+* text=auto eol=lf
+
+# GitHub Actions & YAML should always be LF
+*.yml  text eol=lf
+*.yaml text eol=lf
+
+# Keep Windows batch files CRLF if needed
+*.bat eol=crlf
+*.cmd eol=crlf

@@ -1,0 +1,35 @@
+name: tests
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, egress-allowlist-lock ]
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pytest:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install deps
+        run: |
+          python -m pip install -U pip
+          if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; fi
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install pytest
+      - name: Run tests (skip if none)
+        run: |
+          pytest -q || { c=$?; if [ $c -eq 5 ]; then echo "No tests collected; skipping."; exit 0; else exit $c; fi; }

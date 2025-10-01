@@ -1,3 +1,32 @@
+# tools/repair-operate-ctrader-v2.ps1
+[CmdletBinding()] param(
+  [switch] $CommitAndPush
+)
+$ErrorActionPreference = "Stop"
+$repo = Resolve-Path (Join-Path $PSScriptRoot "..")
+Set-Location $repo
+
+function Write-Utf8NoBom([string]$Path,[string]$Content){
+  $dir = Split-Path -Parent $Path
+  if($dir -and -not (Test-Path -LiteralPath $dir)){ New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+  $enc = New-Object System.Text.UTF8Encoding($false)
+  $norm = $Content -replace "`r`n","`n"; $norm = $norm -replace "`r","`n"
+  [IO.File]::WriteAllText($Path,$norm,$enc)
+}
+
+# --- notifiers init: explicit re-export for Ruff ---
+$notInit = Join-Path $repo "ctrader\notifiers\__init__.py"
+$notInitContent = @'
+# package init (explicit re-export for Ruff)
+from .discord import send as send
+__all__ = ["send"]
+'@
+Write-Utf8NoBom $notInit $notInitContent
+Write-Host "[ OK ] Patched $notInit" -ForegroundColor Green
+
+# --- clean operator script ---
+$opPath = Join-Path $repo "tools\operate-ctrader.ps1"
+$opContent = @'
 param(
   [switch]$DryRun,
   [switch]$Paper,
@@ -118,3 +147,30 @@ if ($ScheduleDailyPaper){ Schedule-DailyPaper -At $DailyTime -AssumeYes:$AssumeY
 if ($PrecommitAndTest){ Run-Quality }
 
 Ok "Done."
+'@
+Write-Utf8NoBom $opPath $opContent
+Write-Host "[ OK ] Replaced $opPath" -ForegroundColor Green
+
+# --- keep repo green ---
+try { Write-Host ">> pre-commit run --all-files" -ForegroundColor Magenta; & pre-commit run --all-files } catch {}
+Write-Host ">> pytest" -ForegroundColor Magenta
+& pytest -q
+if ($LASTEXITCODE -ne 0){ throw ("pytest failed ({0})" -f $LASTEXITCODE) }
+
+if ($CommitAndPush){
+  git add -A
+  if (git status --porcelain){
+    git commit -m "fix(ops): rebuild operate-ctrader.ps1 (PS-only notify, schedule) + explicit notifier re-export"
+    git push
+    Write-Host "[ OK ] Committed and pushed." -ForegroundColor Green
+  } else {
+    Write-Host "[INFO] No changes to commit." -ForegroundColor Cyan
+  }
+}
+
+Write-Host "`n=== SANITY CHECK ===" -ForegroundColor Cyan
+Write-Host ("RepoRoot: " + $repo)
+Write-Host ("Branch: " + (git rev-parse --abbrev-ref HEAD))
+Write-Host "Latest commit:"; git --no-pager log -1 --oneline
+Write-Host "Untracked files:"; git status --porcelain | Where-Object { $_ -like '?? *' } | ForEach-Object { $_ }
+Write-Host "====================`n" -ForegroundColor Cyan

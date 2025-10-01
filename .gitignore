@@ -101,3 +101,7 @@ __pycache__/
 *.log
 
 z_archive*/
+
+tools/repair-operate-ctrader.ps1
+
+tools/fix-operate-ctrader-ascii.ps1

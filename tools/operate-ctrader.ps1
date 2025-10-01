@@ -64,14 +64,55 @@ function Run-Plan([switch]$Paper,[switch]$AssumeYes){
   }
 }
 
-function Notify-Discord([string]$Message){
-  $py = Get-Python
-  $tmp = Join-Path $env:TEMP "ctrader_notify.py"
-  $pyCode = 'import os; from ctrader.notifiers.discord import send; msg=os.environ.get("CTRADER_NOTIFY_MSG","(empty)"); send(msg)'
-  Write-Utf8NoBom $tmp $pyCode
-  $env:CTRADER_NOTIFY_MSG = $Message
-  & $py $tmp
-  if ($LASTEXITCODE -ne 0) { throw ("discord notify failed ({0})" -f $LASTEXITCODE) }
+function Notify-Discord([string]$Message) {
+  # Read webhook from .env (via project helper) OR environment
+  try {
+    # ensure TLS 1.2+
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+  } catch {}
+
+  # Try to call project helper if present
+  if (Get-Command -Name Get-EnvKV -ErrorAction SilentlyContinue) {
+    $url = Get-EnvKV "DISCORD_WEBHOOK_URL"
+  } else {
+    $envPath = Join-Path $PWD ".env"
+    $url = $null
+    if (Test-Path $envPath) {
+      $kv = Get-Content $envPath -Raw |
+        Select-String -Pattern '^DISCORD_WEBHOOK_URL=(.+)$' -AllMatches
+      if ($kv.Matches.Count -gt 0) {
+        $url = $kv.Matches[0].Groups[1].Value.Trim()
+      }
+    }
+    if (-not $url) { $url = $env:DISCORD_WEBHOOK_URL }
+  }
+
+  if (-not $url) {
+    if (Get-Command -Name Warn -ErrorAction SilentlyContinue) {
+      Warn "DISCORD_WEBHOOK_URL not set"
+    } else {
+      Write-Warning "DISCORD_WEBHOOK_URL not set"
+    }
+    return
+  }
+
+  $body = @{ content = $Message } | ConvertTo-Json -Compress
+  try {
+    Invoke-RestMethod -Method Post -Uri $url -ContentType "application/json" -Body $body | Out-Null
+    if (Get-Command -Name Ok -ErrorAction SilentlyContinue) {
+      Ok "Sent Discord notification"
+    } else {
+      Write-Host "[ OK ] Sent Discord notification" -ForegroundColor Green
+    }
+  } catch {
+    if (Get-Command -Name Write-Err -ErrorAction SilentlyContinue) {
+      Write-Err ("Discord notify failed: " + $_.Exception.Message)
+    } else {
+      Write-Error ("Discord notify failed: " + $_.Exception.Message)
+    }
+    throw
+  }
+})" -f $LASTEXITCODE) }
   Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
   Ok "Sent Discord notification"
 }

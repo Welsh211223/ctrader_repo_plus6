@@ -1,15 +1,56 @@
-# verify these lines exist in .gitignore
-@"
-.venv/
-__pycache__/
-*.py[cod]
-
-.env
+﻿# allow documented example
 .env.*
-
-data/
-!data/.keep
+.venv/
+.archive/
+# local secrets
+.vscode/
 "@ | Out-File -Encoding utf8 .\.gitignore
-
+# --- IDE / OS ---
+*.bak
+# --- Python caches/build ---
+reports_*/
+*.tmp.py
+*.egg-info/
+# --- Generated / workspace ---
+reports_*
+*.py[cod]
+!.env.example
+.idea/
+!data/.keep
+__pycache__/
+*.broken.tmp_*.py
+.DS_Store
+build/
+Thumbs.db
+# --- Virtual envs ---
+.tmp*.py
+# verify these lines exist in .gitignore
 # keep the data folder structure without tracking files
+.env
+/.idea/
+@"
+data/
+# --- Local config & secrets ---
+# --- secrets noise (ignore) ---
+dist/
+.tmp_*.py
+.pytest_cache/
+*.old
 ni .\data\.keep -Force | Out-Null
+ctrader_repo_plus6/
+# Secrets
+secrets/*.json
+!secrets/*example*.json
+# Logs & runtime outputs
+logs/
+out/
+*.log
+
+# Tool backups/autosaves
+tools/*.bak-*
+tools/*.autobak-*
+tools/*.autosave-*
+
+# Secrets
+secrets/*.json
+!secrets/*example*.json

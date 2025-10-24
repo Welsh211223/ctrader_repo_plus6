@@ -1,0 +1,45 @@
+﻿name: bandit
+on:
+  pull_request:
+    paths:
+      - "**/*.py"
+      - "pyproject.toml"
+      - "setup.cfg"
+      - ".github/workflows/bandit.yml"
+  push:
+    branches: [main]
+    paths:
+      - "**/*.py"
+      - "pyproject.toml"
+      - "setup.cfg"
+      - ".github/workflows/bandit.yml"
+permissions:
+  contents: read
+concurrency:
+  group: bandit-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  bandit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Harden Runner
+        uses: step-security/harden-runner@v3
+        with:
+          egress-policy: block
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: |
+            requirements*.txt
+            pyproject.toml
+      - run: python -m pip install --upgrade pip bandit
+      - run: |
+          if [ -d src ] || [ -f pyproject.toml ] || [ -f setup.cfg ]; then
+            set +e
+            bandit -r . -q -x tests
+            exit 0
+          else
+            echo "No Python source tree detected — skipping"
+          fi

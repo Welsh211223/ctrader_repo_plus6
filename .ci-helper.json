@@ -1,0 +1,6 @@
+{
+  "Repo": "Welsh211223/ctrader_repo_plus6",
+  "Branch": "egress-allowlist-lock",
+  "Workflow": ".github/workflows/lint.yml",
+  "AddCommonPaths": true
+}

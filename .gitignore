@@ -38,3 +38,19 @@ dist/
 *.old
 ni .\data\.keep -Force | Out-Null
 ctrader_repo_plus6/
+# Secrets
+secrets/*.json
+!secrets/*example*.json
+# Logs & runtime outputs
+logs/
+out/
+*.log
+
+# Tool backups/autosaves
+tools/*.bak-*
+tools/*.autobak-*
+tools/*.autosave-*
+
+# Secrets
+secrets/*.json
+!secrets/*example*.json

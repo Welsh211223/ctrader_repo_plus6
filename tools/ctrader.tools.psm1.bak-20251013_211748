@@ -1,0 +1,261 @@
+﻿Set-StrictMode -Version Latest
+
+function _Get-XmlField {
+  [CmdletBinding()]
+  param(
+    [Parameter(Mandatory)][System.Diagnostics.Eventing.Reader.EventRecord]$Event,
+    [Parameter(Mandatory)][string]$Name
+  )
+  try {
+    $x = [xml]$Event.ToXml()
+    ($x.Event.EventData.Data |
+      Where-Object { $_.Name -eq $Name } |
+      Select-Object -First 1 -ExpandProperty '#text')
+  } catch { $null }
+}
+
+function _Build-Ids { param([switch]$IncludeExtra)
+  $core = 100,102,200,201,203
+  if ($IncludeExtra) { $core += 110,129,325 }
+  $core
+}
+
+function _FirstNonNull { param([object[]]$Values)
+  foreach($v in $Values){ if ($null -ne $v) { return $v } }
+  return $null
+}
+
+function Show-CtraderTaskHistory {
+  [CmdletBinding()] param(
+    [string]$TaskName = '\ctrader-paper-daily',
+    [int]$Minutes = 60,
+    [switch]$IncludeExtra,
+    [string]$ComputerName,
+    [switch]$Raw
+  )
+  $logName = 'Microsoft-Windows-TaskScheduler/Operational'
+  $ids = _Build-Ids -IncludeExtra:$IncludeExtra
+  $tn = if ($TaskName -like '\*') { $TaskName } else { '\' + $TaskName }
+  $tnEsc = $tn -replace '''', ''''''
+  $ms = [int][TimeSpan]::FromMinutes([math]::Abs($Minutes)).TotalMilliseconds
+  $idsExpr = ($ids | ForEach-Object { "EventID=$_"} ) -join ' or '
+  $xpath = "*[System[($idsExpr) and TimeCreated[timediff(@SystemTime) <= $ms]]] and *[EventData[Data[@Name='TaskName']='$tnEsc']]"
+  $p = @{ LogName = $logName; FilterXPath = $xpath }
+  if ($ComputerName) { $p.ComputerName = $ComputerName }
+  $events = Get-WinEvent @p | Sort-Object TimeCreated
+  if ($Raw) { return $events }
+  $events | ForEach-Object {
+    [pscustomobject]@{
+      Id          = $_.Id
+      TimeCreated = $_.TimeCreated
+      TaskName    = _Get-XmlField -Event $_ -Name 'TaskName'
+      InstanceId  = _Get-XmlField -Event $_ -Name 'InstanceId'
+      ResultCode  = _Get-XmlField -Event $_ -Name 'ResultCode'
+      Level       = $_.LevelDisplayName
+      Message     = $_.Message
+    }
+  }
+}
+
+function Show-CtraderTaskProblems {
+  [CmdletBinding()] param(
+    [string]$TaskName = '\ctrader-paper-daily',
+    [int]$Hours = 24,
+    [switch]$IncludeQueued,
+    [string]$ComputerName,
+    [switch]$Raw
+  )
+  $logName = 'Microsoft-Windows-TaskScheduler/Operational'
+  $tn = if ($TaskName -like '\*') { $TaskName } else { '\' + $TaskName }
+  $tnEsc = $tn -replace '''', ''''''
+  $ids = @(101,103,104)
+  if ($IncludeQueued) { $ids += 325 }
+  $idsExpr = ($ids | ForEach-Object { "EventID=$_"} ) -join ' or '
+  $ms = [int][TimeSpan]::FromHours([math]::Abs($Hours)).TotalMilliseconds
+  $xpath = "*[System[($idsExpr) and TimeCreated[timediff(@SystemTime) <= $ms]]] and *[EventData[Data[@Name='TaskName']='$tnEsc']]"
+  $p = @{ LogName = $logName; FilterXPath = $xpath }
+  if ($ComputerName) { $p.ComputerName = $ComputerName }
+  $events = Get-WinEvent @p | Sort-Object TimeCreated
+  if ($Raw) { return $events }
+  $events | ForEach-Object {
+    [pscustomobject]@{
+      Id          = $_.Id
+      TimeCreated = $_.TimeCreated
+      TaskName    = _Get-XmlField -Event $_ -Name 'TaskName'
+      InstanceId  = _Get-XmlField -Event $_ -Name 'InstanceId'
+      Level       = $_.LevelDisplayName
+      Message     = $_.Message
+    }
+  }
+}
+
+function Get-CtraderTaskRuns2 {
+  [CmdletBinding()] param(
+    [string]$TaskName = '\ctrader-paper-daily',
+    [int]$Hours = 24,
+    [switch]$IncludeExtra,
+    [string]$ComputerName,
+    [datetime]$Since
+  )
+  $start = if ($Since) { $Since } else { (Get-Date).AddHours(-[math]::Abs($Hours)) }
+  $minutes = [int][math]::Ceiling(((Get-Date) - $start).TotalMinutes)
+  $hoursForProblems = [int][math]::Ceiling(((Get-Date) - $start).TotalHours)
+
+  $hist = Show-CtraderTaskHistory  -TaskName $TaskName -Minutes $minutes -IncludeExtra:$IncludeExtra -ComputerName $ComputerName -Raw
+  $prob = Show-CtraderTaskProblems -TaskName $TaskName -Hours   $hoursForProblems -IncludeQueued -ComputerName $ComputerName -Raw
+
+  $all = @($hist + $prob) | Sort-Object TimeCreated
+  if (-not $all) { return }
+
+  $rxGuid = [regex]'\{[0-9a-fA-F-]{36}\}'
+  $rows = foreach($e in $all){
+    if ($e.TimeCreated -lt $start) { continue }
+    $id = _Get-XmlField -Event $e -Name 'InstanceId'
+    if (-not $id) { $id = $rxGuid.Match($e.Message).Value }
+    if (-not $id) { continue }
+    [pscustomobject]@{
+      InstanceId = $id
+      TaskName   = (_Get-XmlField -Event $e -Name 'TaskName')
+      Id         = $e.Id
+      Time       = $e.TimeCreated
+      Message    = $e.Message
+      Level      = $e.LevelDisplayName
+      ResultCode = (_Get-XmlField -Event $e -Name 'ResultCode')
+    }
+  }
+  if (-not $rows) { return }
+
+  $rows | Group-Object InstanceId | ForEach-Object {
+    $events = $_.Group | Sort-Object Time
+    $tn     = ($events | Where-Object TaskName | Select-Object -Last 1 -ExpandProperty TaskName)
+    if (-not $tn) { $tn = $TaskName }
+
+    $t325 = $events | Where-Object Id -eq 325 | Select-Object -First 1
+    $t110 = $events | Where-Object Id -eq 110 | Select-Object -First 1
+    $t100 = $events | Where-Object Id -eq 100 | Select-Object -First 1
+    $t200 = $events | Where-Object Id -eq 200 | Select-Object -First 1
+    $t129 = $events | Where-Object Id -eq 129 | Select-Object -First 1
+    $t201 = $events | Where-Object Id -eq 201 | Select-Object -Last 1
+    $t102 = $events | Where-Object Id -eq 102 | Select-Object -Last 1
+
+    $started   = if ($t100) { $t100.Time }
+    $completed = if ($t201) { $t201.Time } elseif ($t102) { $t102.Time }
+
+    $rc = $null
+    if ($t201 -and $t201.ResultCode -ne $null) {
+      $tmp = $t201.ResultCode -as [int]; if ($tmp -is [int]) { $rc = $tmp }
+    }
+    if ($null -eq $rc -and $t201) {
+      $m = ([regex]'return code\s+(-?\d+)').Match($t201.Message)
+      if ($m.Success) { $rc = [int]$m.Groups[1].Value }
+    }
+
+    $duration = if ($started -and $completed) { [math]::Round( ($completed - $started).TotalSeconds, 2) }
+
+    $fails = $events | Where-Object { $_.Id -in 101,103,104 }
+    if     ($fails)     { $status = 'Failed' }
+    elseif ($completed) { $status = (if ($rc -ne $null -and $rc -ne 0) { "Completed (rc=$rc)" } else { 'Completed' }) }
+    elseif ($started)   { $status = 'In-Progress/Aborted?' }
+    else                { $status = 'Queued/Triggered' }
+
+    [pscustomobject]@{
+      TaskName     = $tn
+      InstanceId   = $_.Name
+      QueuedAt     = if ($t325) { $t325.Time }
+      TriggeredAt  = if ($t110) { $t110.Time }
+      StartedAt    = $started
+      ActionAt     = if ($t200) { $t200.Time }
+      ProcessAt    = if ($t129) { $t129.Time }
+      CompletedAt  = $completed
+      DurationSec  = $duration
+      ReturnCode   = $rc
+      Status       = $status
+      FailCount    = ($fails | Measure-Object).Count
+    }
+  } | Sort-Object @{ Expression = { _FirstNonNull @($_.StartedAt, $_.TriggeredAt, $_.QueuedAt, $_.CompletedAt, (Get-Date 0)) }; Descending = $true }
+}
+
+function Get-CtraderTaskRuns {
+  [CmdletBinding(DefaultParameterSetName='ByHours')] param(
+    [Parameter(ParameterSetName='ByHours')][int]$Hours = 24,
+    [Parameter(ParameterSetName='BySince')][datetime]$Since,
+    [string]$TaskName = '\ctrader-paper-daily',
+    [switch]$IncludeExtra,
+    [string]$ComputerName
+  )
+  if ($PSCmdlet.ParameterSetName -eq 'BySince') {
+    Get-CtraderTaskRuns2 -TaskName $TaskName -Since $Since -IncludeExtra:$IncludeExtra -ComputerName $ComputerName
+  } else {
+    Get-CtraderTaskRuns2 -TaskName $TaskName -Hours $Hours -IncludeExtra:$IncludeExtra -ComputerName $ComputerName
+  }
+}
+
+function Get-CtraderTaskRollup {
+  [CmdletBinding()] param(
+    [string]$TaskName = '\ctrader-*',
+    [int]$Hours = 24,
+    [switch]$IncludeExtra,
+    [string]$ComputerName,
+    [switch]$ByTaskThenTime
+  )
+  $runs = Get-CtraderTaskRuns2 -TaskName $TaskName -Hours $Hours -IncludeExtra:$IncludeExtra -ComputerName $ComputerName
+  if (-not $runs) { return }
+  if ($ByTaskThenTime) {
+    $runs | Sort-Object TaskName, @{Expression={ _FirstNonNull @($_.StartedAt, $_.TriggeredAt, $_.QueuedAt, $_.CompletedAt, (Get-Date 0)) };Descending=$true}
+  } else {
+    $runs
+  }
+}
+
+function Get-CtraderTaskSummary {
+  [CmdletBinding()] param(
+    [string]$TaskName = '\ctrader-*',
+    [int]$Hours = 24,
+    [switch]$IncludeExtra,
+    [string]$ComputerName
+  )
+  $runs = Get-CtraderTaskRuns2 -TaskName $TaskName -Hours $Hours -IncludeExtra:$IncludeExtra -ComputerName $ComputerName
+  if (-not $runs) { return }
+  $byTask = $runs | Group-Object TaskName | ForEach-Object {
+    $ok   = ($_.Group | Where-Object { $_.Status -like 'Completed*' }).Count
+    $fail = ($_.Group | Where-Object { $_.Status -eq 'Failed' }).Count
+    [pscustomobject]@{
+      TaskName = $_.Name
+      Total    = $_.Count
+      Completed= $ok
+      Failed   = $fail
+      LastRun  = ($_.Group | Sort-Object @{Expression={ _FirstNonNull @($_.StartedAt, $_.TriggeredAt, $_.QueuedAt, $_.CompletedAt, (Get-Date 0)) };Descending=$true} | Select-Object -First 1)
+    }
+  }
+  $byTask | Sort-Object TaskName
+}
+
+function Watch-CtraderTask {
+  [CmdletBinding()] param(
+    [string]$TaskName = '\ctrader-paper-daily',
+    [switch]$IncludeExtra
+  )
+  Write-Host "Watching $TaskName (press Ctrl+C to stop)..." -ForegroundColor Cyan
+  $last = Get-Date
+  while ($true) {
+    $rows = Get-CtraderTaskRuns2 -TaskName $TaskName -Since $last -IncludeExtra:$IncludeExtra
+    if ($rows) {
+      $rows | Sort-Object StartedAt | ForEach-Object {
+        $t  = _FirstNonNull @($_.StartedAt, $_.TriggeredAt, $_.QueuedAt, $_.CompletedAt)
+        $rc = if ($null -ne $_.ReturnCode) { $_.ReturnCode } else { '' }
+        "{0}  {1}  {2}  rc={3}" -f $t, $_.Status, $_.TaskName, $rc
+      }
+      $last = Get-Date
+    }
+    Start-Sleep -Seconds 3
+  }
+}
+
+Export-ModuleMember -Function `
+  Show-CtraderTaskHistory, `
+  Show-CtraderTaskProblems, `
+  Get-CtraderTaskSummary, `
+  Get-CtraderTaskRollup, `
+  Watch-CtraderTask, `
+  Get-CtraderTaskRuns, `
+  Get-CtraderTaskRuns2

@@ -1,0 +1,7 @@
+﻿{
+  "files.eol": "\n",
+  "python.testing.pytestEnabled": true,
+  "python.testing.pytestArgs": ["-q"],
+  "python.analysis.typeCheckingMode": "basic",
+  "editor.formatOnSave": true
+}

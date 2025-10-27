@@ -1,10 +1,15 @@
 from __future__ import annotations
+
+import hashlib
+import json
+import time
 from pathlib import Path
-import json, time, hashlib
+
 
 class JsonDiskCache:
     def __init__(self, base: Path, ttl_sec: int = 86400):
-        self.base = Path(base); self.base.mkdir(parents=True, exist_ok=True)
+        self.base = Path(base)
+        self.base.mkdir(parents=True, exist_ok=True)
         self.ttl_sec = int(ttl_sec)
 
     def _path_for(self, key: str) -> Path:
@@ -13,11 +18,14 @@ class JsonDiskCache:
 
     def get(self, key: str):
         fp = self._path_for(key)
-        if not fp.exists(): return None
+        if not fp.exists():
+            return None
         try:
-            with open(fp, "r", encoding="utf-8") as f: payload = json.load(f)
+            with open(fp, "r", encoding="utf-8") as f:
+                payload = json.load(f)
             ts = float(payload.get("_ts", 0))
-            if time.time() - ts > self.ttl_sec: return None
+            if time.time() - ts > self.ttl_sec:
+                return None
             return payload.get("data")
         except Exception:
             return None

@@ -9,3 +9,11 @@ requires-python = ">=3.10"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.isort]
+profile = "black"
+src_paths = ["src", "tests"]
+
+[tool.black]
+line-length = 88
+target-version = ["py311", "py312", "py313"]

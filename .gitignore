@@ -13,3 +13,21 @@ data/
 
 # keep the data folder structure without tracking files
 ni .\data\.keep -Force | Out-Null
+
+.idea/
+
+.idea/
+
+*.egg-info/
+
+src/ctrader.egg-info/
+
+.streamlit/
+
+.pytest_cache/
+
+.ruff_cache/
+
+.mypy_cache/
+
+**/__pycache__/

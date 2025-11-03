@@ -26,3 +26,6 @@ python src/ctrader/cli/trade.py --pool conservative   --coinspot-use-quote --coi
 ```
 streamlit run src/ctrader/app.py
 ```
+
+
+> CI bootstrap test: 2025-11-03T17:36:55.9011578+08:00

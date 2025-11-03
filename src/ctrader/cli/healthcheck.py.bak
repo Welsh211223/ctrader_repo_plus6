@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import os
 
-from ctrader.data_providers.coinspot import _get as _pub_get
+from ctrader.data_providers.coinspot import _get as _pub_get  # type: ignore
 from ctrader.data_providers.coinspot_v2 import CoinSpotV2
 
 

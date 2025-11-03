@@ -9,7 +9,7 @@ def _round_qty(qty: float, precision: int | None) -> float:
     if precision is None:
         return float(qty)
     factor = 10 ** int(precision)
-    return float(math.floor(qty * factor + 1e-12) / factor)
+    return math.floor(qty * factor + 1e-12) / factor
 
 
 def create_rebalance_plan(

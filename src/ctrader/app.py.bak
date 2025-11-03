@@ -4,7 +4,6 @@ import json
 import os
 import sys
 from pathlib import Path
-from typing import Any, cast
 
 import numpy as np
 import pandas as pd
@@ -31,7 +30,7 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
-st.title("Crypto Trader Dashboard")
+st.title("ðŸ“Š Crypto Trader Dashboard")
 
 BASE = HERE.parents[2] / "data"  # project_root\data
 pool = st.selectbox("Pool", ["conservative", "aggressive"])
@@ -43,8 +42,8 @@ latest = None
 if runlog_fp.exists():
     try:
         with open(runlog_fp, "r", encoding="utf-8") as f:
-            raw_lines = [line.strip() for line in f if line.strip()]
-            recs = [json.loads(x) for x in raw_lines[-500:]]  # tail only
+            rows = [line.strip() for line in f if line.strip()]
+        recs = [json.loads(x) for x in rows[-500:]]  # tail only
         df_runs = pd.DataFrame(recs)
         if not df_runs.empty and "pool" in df_runs.columns:
             latest = df_runs[df_runs["pool"] == pool].tail(1)
@@ -132,10 +131,7 @@ if ak and sk:
         ro = cs.ro_balances()
         bals = (ro or {}).get("balances", {})
         if isinstance(bals, dict) and bals:
-            rows = cast(
-                list[dict[str, Any]],
-                [{"coin": k.upper(), "balance": v} for k, v in bals.items()],
-            )
+            rows = [{"coin": k.upper(), "balance": v} for k, v in bals.items()]
             st.dataframe(pd.DataFrame(rows).sort_values("coin"))
         else:
             st.info("No balances returned (check RO access for your API key).")
@@ -185,6 +181,6 @@ if sig_dir.exists():
         except Exception as e:
             st.warning(f"Could not read signals: {e}")
     else:
-        st.info("No signals yet")
+        st.info("No signals yetâ€”run the trader once.")
 else:
     st.info("No signals directory yet.")

@@ -46,7 +46,7 @@ from ctrader.strategies.trend_filter import apply_trend_filter
 def _sma(series, window: int) -> float:
     if not series or window <= 0 or len(series) < window:
         return float("nan")
-    return float(sum(series[-window:]) / float(window))
+    return sum(series[-window:]) / float(window)
 
 
 def _risk_off_trigger(cfg: dict, quote: str) -> bool:
@@ -263,7 +263,7 @@ def _validate_pool_config(cfg: dict, pool: str) -> list[str]:
 # --------------------------- main ---------------------------
 
 
-def main() -> None:
+def main():
     ap = argparse.ArgumentParser()
     ap.add_argument(
         "--config",
@@ -739,7 +739,7 @@ def main() -> None:
                     webhook,
                     "Circuit breaker tripped",
                     msg,
-                    fields={"trades": str(len(plan))},
+                    fields={"trades": len(plan)},
                 )
             _slack("Circuit breaker tripped", {"trades": len(plan)})
             return
@@ -859,7 +859,7 @@ def main() -> None:
                     webhook,
                     "Paper run complete",
                     f"Pool: {args.pool}",
-                    fields={"trades": str(len(plan))},
+                    fields={"trades": len(plan)},
                 )
             _slack("Paper run complete", {"trades": len(plan)})
         else:
@@ -895,7 +895,7 @@ def main() -> None:
                     webhook,
                     "Live run complete",
                     f"Pool: {args.pool}",
-                    fields={"trades": str(len(res))},
+                    fields={"trades": len(res)},
                 )
             _slack("Live run complete", {"trades": len(plan)})
 

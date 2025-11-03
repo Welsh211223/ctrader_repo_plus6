@@ -52,9 +52,7 @@ def inverse_vol_weights(
         + float(strength) * float(invw.get(k, 0.0))
         for k, w in base.items()
     }
-    total = float(sum(out.values()))
+    s = sum(out.values())
     return (
-        {k: v / total for k, v in out.items()}
-        if total
-        else {k: 1.0 / len(base) for k in base}
+        {k: v / s for k, v in out.items()} if s else {k: 1.0 / len(base) for k in base}
     )

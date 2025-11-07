@@ -12,7 +12,7 @@ $PSNativeCommandUseErrorActionPreference = $false
 function Ok($m){ Write-Host "[OK]  $m" -ForegroundColor Green }
 function Info($m){ Write-Host "[..] $m" -ForegroundColor Cyan }
 function Warn($m){ Write-Host "[!!] $m" -ForegroundColor Yellow }
-function Die($m){ Write-Host "[XX] $m" -ForegroundColor Red; exit 1 }
+function Die($m){ Write-Host "[XX] $m" -ForegroundColor Red; throw $m }
 
 # --- 1) Git hygiene ---
 try {

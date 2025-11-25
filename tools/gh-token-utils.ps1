@@ -53,6 +53,7 @@ function Show-TokenSanity {
     try {
         $me = Invoke-RestMethod -Headers $H -Uri "https://api.github.com/user"
         $r  = Invoke-RestMethod -Headers $H -Uri "https://api.github.com/repos/$Owner/$Repo"
+
         "[OK] User: {0} | Admin:{1} Push:{2}" -f $me.login, $r.permissions.admin, $r.permissions.push
 
         try {

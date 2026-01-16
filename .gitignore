@@ -33,3 +33,18 @@ src/ctrader.egg-info/
 **/__pycache__/
 
 logs/
+# Local / temp
+config/live.flag
+
+# Backups / scratch
+*.bak
+*.bak_*
+*.backup_*.csv
+dashboard.py.bak
+dashboard.broken-*.py
+
+# Scratch runners (if you keep them local)
+run.py
+simulator.py
+strategies/
+summarize-backtest.ps1

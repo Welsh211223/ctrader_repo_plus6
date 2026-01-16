@@ -5,12 +5,30 @@ param(
   [switch]$Force
 )
 
+Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+
+# Duplicate-window flag used by update-paper-portfolio.ps1
+$dupFlag = Join-Path $PSScriptRoot "..\logs\_duplicate_window.flag"
+
+# Always clear at the start; we only create it when we detect a duplicate
+Remove-Item $dupFlag -ErrorAction SilentlyContinue | Out-Null
+
+function Ensure-File([string]$path, [string]$headerLine) {
+  $dir = Split-Path -Parent $path
+  if (-not [string]::IsNullOrWhiteSpace($dir) -and -not (Test-Path $dir)) {
+    New-Item -ItemType Directory -Path $dir -Force | Out-Null
+  }
+  if (-not (Test-Path $path)) {
+    $headerLine | Out-File -FilePath $path -Encoding utf8
+  }
+}
 
 function Get-LatestWindowFromSignal([object[]]$rows) {
   if (-not $rows -or $rows.Count -eq 0) { return $null }
-  $ws = ($rows | Select-Object -First 1).window_start
-  $we = ($rows | Select-Object -First 1).window_end
+  $first = $rows | Select-Object -First 1
+  $ws = if ($first.PSObject.Properties.Name -contains "window_start") { [string]$first.window_start } else { "" }
+  $we = if ($first.PSObject.Properties.Name -contains "window_end")   { [string]$first.window_end }   else { "" }
   return [pscustomobject]@{ window_start = $ws; window_end = $we }
 }
 
@@ -19,115 +37,94 @@ if (-not (Test-Path $SignalCsv)) {
 }
 
 $rows = Import-Csv $SignalCsv
-
-# --- Phase 4 safety: backfill missing columns (signal CSV may not include them) ---
-$__RunIdFallback    = (Get-Date -Format "yyyyMMdd_HHmmss")
-$__RunLocalFallback = (Get-Date -Format "yyyy-MM-ddTHH:mm:ss")
-$__NoteFallback     = "signal"
-foreach ($__s in $rows) {
-  if ($__s -and ($__s.PSObject.Properties.Name -notcontains "run_id")) {
-    $null = $__s | Add-Member -NotePropertyName "run_id" -NotePropertyValue $__RunIdFallback -Force
-  }
-  if ($__s -and ($__s.PSObject.Properties.Name -notcontains "run_local")) {
-    $null = $__s | Add-Member -NotePropertyName "run_local" -NotePropertyValue $__RunLocalFallback -Force
-  }
-  if ($__s -and ($__s.PSObject.Properties.Name -notcontains "note")) {
-    $null = $__s | Add-Member -NotePropertyName "note" -NotePropertyValue $__NoteFallback -Force
-  }
-}
-# --- /Phase 4 safety ---
-
-
-# --- Phase 4 safety: backfill run_id + run_local if missing (signal CSV may not include them) ---
-$__RunIdFallback = (Get-Date -Format "yyyyMMdd_HHmmss")
-$__RunLocalFallback = (Get-Date -Format "yyyy-MM-ddTHH:mm:ss")
-foreach ($__s in $rows) {
-  if ($__s -and ($__s.PSObject.Properties.Name -notcontains "run_id")) {
-    $null = $__s | Add-Member -NotePropertyName "run_id" -NotePropertyValue $__RunIdFallback -Force
-  }
-  if ($__s -and ($__s.PSObject.Properties.Name -notcontains "run_local")) {
-    $null = $__s | Add-Member -NotePropertyName "run_local" -NotePropertyValue $__RunLocalFallback -Force
-  }
-}
-# --- /Phase 4 safety: backfill run_id + run_local ---
-
-
-# --- Phase 4 safety: backfill run_id if missing (signal CSV may not include run_id) ---
-$__RunIdFallback = (Get-Date -Format "yyyyMMdd_HHmmss")
-foreach ($__s in $rows) {
-  if ($__s -and ($__s.PSObject.Properties.Name -notcontains "run_id")) {
-    $null = $__s | Add-Member -NotePropertyName "run_id" -NotePropertyValue $__RunIdFallback -Force
-  }
-}
-# --- /Phase 4 safety: backfill run_id ---
-
 if (-not $rows -or $rows.Count -eq 0) {
   Write-Host "[ledger] No rows in $SignalCsv (HOLD CASH week?) - nothing to append." -ForegroundColor Yellow
   exit 0
 }
 
+# Backfill missing columns once (signal CSV may not include them)
+$runIdFallback    = (Get-Date -Format "yyyyMMdd_HHmmss")
+$runLocalFallback = (Get-Date -Format "yyyy-MM-ddTHH:mm:ss")
+$noteFallback     = "signal"
+
+foreach ($s in $rows) {
+  if ($s -and ($s.PSObject.Properties.Name -notcontains "run_id")) {
+    $null = $s | Add-Member -NotePropertyName "run_id" -NotePropertyValue $runIdFallback -Force
+  } elseif ($s -and [string]::IsNullOrWhiteSpace([string]$s.run_id)) {
+    $s.run_id = $runIdFallback
+  }
+
+  if ($s -and ($s.PSObject.Properties.Name -notcontains "run_local")) {
+    $null = $s | Add-Member -NotePropertyName "run_local" -NotePropertyValue $runLocalFallback -Force
+  } elseif ($s -and [string]::IsNullOrWhiteSpace([string]$s.run_local)) {
+    $s.run_local = $runLocalFallback
+  }
+
+  if ($s -and ($s.PSObject.Properties.Name -notcontains "note")) {
+    $null = $s | Add-Member -NotePropertyName "note" -NotePropertyValue $noteFallback -Force
+  } elseif ($s -and [string]::IsNullOrWhiteSpace([string]$s.note)) {
+    $s.note = $noteFallback
+  }
+}
+
+# Ensure ledger exists
+Ensure-File $LedgerCsv "run_id,run_local,window_start,window_end,base_pair,action,buy_aud,units,last_price,weekly_budget_aud,note"
+
+# Determine window
 $win = Get-LatestWindowFromSignal $rows
-if (-not $win) {
-  throw "[ledger] Could not read window_start/window_end from $SignalCsv"
-}
+$ws = [string]$win.window_start
+$we = [string]$win.window_end
 
-# Duplicate guard: if ledger already has this exact window, block unless -Force
-if (Test-Path $LedgerCsv) {
-  $ledger = Import-Csv $LedgerCsv
-  $hits = @($ledger | Where-Object { $_.window_start -eq $win.window_start -and $_.window_end -eq $win.window_end })
-  if ($hits.Count -gt 0 -and -not $Force) {
-    throw "[ledger] DUPLICATE: window $($win.window_start) -> $($win.window_end) already exists in ledger. Use -Force to override."
+# Duplicate guard against ledger (window-level)
+if (-not $Force -and -not [string]::IsNullOrWhiteSpace($ws) -and -not [string]::IsNullOrWhiteSpace($we) -and (Test-Path $LedgerCsv)) {
+  $dup = Select-String -Path $LedgerCsv -Pattern (",$ws,$we,") -SimpleMatch -ErrorAction SilentlyContinue
+  if ($dup) {
+    Write-Host "[ledger] DUPLICATE: window $ws -> $we already exists in ledger. Use -Force to override." -ForegroundColor Yellow
+    "duplicate" | Out-File -FilePath $dupFlag -Encoding utf8
+    exit 0
   }
 }
 
-# Compute totals
-$weeklyBudget = 0.0
-try { $weeklyBudget = [double]($rows[0].weekly_budget_aud) } catch { $weeklyBudget = 0.0 }
-
-$allocatedTotal = 0.0
+# Append ledger rows (normalized columns, tolerate missing fields)
 foreach ($r in $rows) {
-  try { $allocatedTotal += [double]($r.invested_aud) } catch {}
-}
-$cashUnallocated = [Math]::Round(($weeklyBudget - $allocatedTotal), 2)
+  $run_id   = [string]$r.run_id
+  $run_local= [string]$r.run_local
+  $wstart   = if ($r.PSObject.Properties.Name -contains "window_start") { [string]$r.window_start } else { $ws }
+  $wend     = if ($r.PSObject.Properties.Name -contains "window_end")   { [string]$r.window_end }   else { $we }
 
-# Add per-row fields (repeat totals for convenience)
-$enhanced = foreach ($r in $rows) {
-  $req = 0.0
-  try { $req = [double]($r.invested_aud) } catch { $req = 0.0 }
+  $base_pair = ""
+  if ($r.PSObject.Properties.Name -contains "base_pair") { $base_pair = [string]$r.base_pair }
+  elseif ($r.PSObject.Properties.Name -contains "symbol") { $base_pair = [string]$r.symbol }
+  elseif ($r.PSObject.Properties.Name -contains "pair") { $base_pair = [string]$r.pair }
 
-  [pscustomobject]@{
-    run_id              = $r.run_id
-    run_local           = $r.run_local
-    window_start        = $r.window_start
-    window_end          = $r.window_end
-    symbol_label        = $r.symbol_label
-    base_pair           = $r.base_pair
-    invested_aud        = $r.invested_aud
-    required_transfer_aud = ("{0:F2}" -f $req)
-    allocated_total_aud   = ("{0:F2}" -f $allocatedTotal)
-    cash_unallocated_aud  = ("{0:F2}" -f $cashUnallocated)
-    units               = $r.units
-    last_price          = $r.last_price
-    window_pnl_pct      = $r.window_pnl_pct
-    weekly_budget_aud   = $r.weekly_budget_aud
-    note                = $r.note
-  }
-}
+  $action = ""
+  if ($r.PSObject.Properties.Name -contains "action") { $action = [string]$r.action }
+  elseif ($r.PSObject.Properties.Name -contains "side") { $action = [string]$r.side }
+  elseif ($r.PSObject.Properties.Name -contains "signal") { $action = [string]$r.signal }
+  elseif ($r.PSObject.Properties.Name -contains "decision") { $action = [string]$r.decision }
 
-# Append (or create)
-$header = @(
-  "run_id","run_local","window_start","window_end","symbol_label","base_pair",
-  "invested_aud","required_transfer_aud","allocated_total_aud","cash_unallocated_aud",
-  "units","last_price","window_pnl_pct","weekly_budget_aud","note"
-)
+  $buy_aud = if ($r.PSObject.Properties.Name -contains "buy_aud") { [string]$r.buy_aud } else { "" }
+  $units   = if ($r.PSObject.Properties.Name -contains "units") { [string]$r.units } else { "" }
+  $last_px = if ($r.PSObject.Properties.Name -contains "last_price") { [string]$r.last_price } else { "" }
+  $budget  = if ($r.PSObject.Properties.Name -contains "weekly_budget_aud") { [string]$r.weekly_budget_aud } else { "" }
+  $note    = [string]$r.note
 
-if (-not (Test-Path $LedgerCsv)) {
-  $enhanced | Select-Object $header | Export-Csv -NoTypeInformation -Encoding UTF8 $LedgerCsv
-  Write-Host "[ledger] Created $LedgerCsv (rows=$($enhanced.Count))" -ForegroundColor Green
-} else {
-  # Export-Csv appends only with -Append in PS7, but we must keep header stable
-  $enhanced | Select-Object $header | Export-Csv -NoTypeInformation -Encoding UTF8 -Append $LedgerCsv
-  Write-Host "[ledger] Appended to $LedgerCsv (rows=$($enhanced.Count))" -ForegroundColor Green
+  # CSV-safe: wrap fields that might contain commas
+  $line = @(
+    $run_id,
+    $run_local,
+    $wstart,
+    $wend,
+    $base_pair,
+    $action,
+    $buy_aud,
+    $units,
+    $last_px,
+    $budget,
+    $note
+  ) -join ','
+
+  $line | Out-File -FilePath $LedgerCsv -Append -Encoding utf8
 }
 
-Write-Host ("[ledger] Weekly budget: A${0:F2} | Allocated: A${1:F2} | Unallocated: A${2:F2}" -f $weeklyBudget, $allocatedTotal, $cashUnallocated) -ForegroundColor Cyan
+Write-Host "[ledger] Appended $(($rows | Measure-Object).Count) rows for window $ws -> $we" -ForegroundColor Green

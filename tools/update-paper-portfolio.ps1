@@ -3,10 +3,23 @@ param(
   [string]$SignalCsv = ".\logs\latest_crypto_signal.csv",
   [string]$PositionsCsv = ".\logs\paper_positions.csv",
   [string]$TradesCsv = ".\logs\paper_trades.csv",
-  [string]$PortfolioCsv = ".\logs\paper_portfolio.csv"
+  [string]$PortfolioCsv = ".\logs\paper_portfolio.csv",
+  [switch]$Force
 )
 
+Set-StrictMode -Version Latest
+$ErrorActionPreference = "Stop"
 
+# -------------------------------------------------------------------
+# Duplicate-window guard handshake
+# Step 4 (append-paper-ledger) should write logs\_duplicate_window.flag
+# If present, we skip portfolio update unless -Force is provided.
+# -------------------------------------------------------------------
+$DuplicateFlag = Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) "..\logs\_duplicate_window.flag"
+if (-not $Force -and (Test-Path $DuplicateFlag)) {
+  Write-Host "[paper] Duplicate window flag present — skipping portfolio update. Use -Force to override." -ForegroundColor Yellow
+  exit 0
+}
 
 # -------------------------------------------------------------------
 # SAFESET: create-or-set property on PSCustomObject/hashtable
@@ -19,29 +32,24 @@ function Set-NoteProp {
   )
   if ($null -eq $Obj) { return }
 
-  # Hashtable/dictionary path
   if ($Obj -is [hashtable] -or $Obj -is [System.Collections.IDictionary]) {
     $Obj[$Name] = $Value
     return
   }
 
-  # PSCustomObject / PSObject path
   if ($Obj.PSObject.Properties.Name -contains $Name) {
     $Obj.$Name = $Value
   } else {
     $Obj | Add-Member -MemberType NoteProperty -Name $Name -Value $Value -Force | Out-Null
   }
 }
-Set-StrictMode -Version Latest
-$ErrorActionPreference = "Stop"
 
 function To-Decimal([object]$x) {
   if ($null -eq $x) { return [decimal]0 }
   $s = [string]$x
   if ([string]::IsNullOrWhiteSpace($s)) { return [decimal]0 }
   $s = $s.Trim()
-  # strip currency prefix like "A$"
-  $s = $s -replace '^[A-Za-z]\$',''
+  $s = $s -replace '^[A-Za-z]\$',''   # strip currency prefix like "A$"
   $s = $s -replace '[, ]',''
   try { return [decimal]$s } catch { return [decimal]0 }
 }
@@ -60,13 +68,6 @@ function Get-NowUtcIso() {
   return [DateTime]::UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ")
 }
 
-if (-not (Test-Path $SignalCsv)) {
-  throw "[paper] Missing signal CSV: $SignalCsv (run tools\crypto_dca_signals_cc.py first)"
-}
-
-$signals = Import-Csv $SignalCsv
-if (-not $signals) { throw "[paper] Signal CSV has no rows: $SignalCsv" }
-
 # --- Robust field helpers (tolerate schema differences) ---
 function HasField($obj, [string]$name) {
   return ($obj -and ($obj.PSObject.Properties.Name -contains $name))
@@ -80,6 +81,14 @@ function GetField($obj, [string[]]$names, [string]$default="") {
   }
   return $default
 }
+# --- /Robust field helpers ---
+
+if (-not (Test-Path $SignalCsv)) {
+  throw "[paper] Missing signal CSV: $SignalCsv (run tools\crypto_dca_signals_cc.py first)"
+}
+
+$signals = Import-Csv $SignalCsv
+if (-not $signals) { throw "[paper] Signal CSV has no rows: $SignalCsv" }
 
 # Detect schema from first row
 $pairField   = "base_pair"
@@ -98,11 +107,6 @@ if ($signals -and $signals.Count -gt 0) {
   elseif ($cols -contains "decision") { $actionField = "decision" }
   else { $actionField = "" } # infer later
 }
-# --- /Robust field helpers ---
-
-# Expect at least these columns from latest_crypto_signal.csv:
-# base_pair, quote_ccy, action, buy_aud, units, last_price, weekly_budget_aud, window_start, window_end, run_id(optional)
-# We'll handle missing columns safely.
 
 # Backfill run_id if missing
 $runIdFallback = (Get-Date -Format "yyyyMMdd_HHmmss")
@@ -114,7 +118,7 @@ foreach ($s in $signals) {
   }
 }
 
-# Backfill window_start/window_end if missing (best effort)
+# Backfill window_start/window_end if missing
 foreach ($s in $signals) {
   if ($s.PSObject.Properties.Name -notcontains "window_start") {
     $null = $s | Add-Member -NotePropertyName "window_start" -NotePropertyValue "" -Force
@@ -124,36 +128,53 @@ foreach ($s in $signals) {
   }
 }
 
-# Determine "weekly budget" and allocated total (best effort)
+# Window info (first row)
+$ws = [string]$signals[0].window_start
+$we = [string]$signals[0].window_end
+$rid0 = [string]$signals[0].run_id
+
+# -------------------------------------------------------------------
+# SECOND duplicate guard: if TradesCsv already contains this window with mode=paper_exec,
+# skip (unless -Force). This prevents cash bleed on reruns even if the flag is missing.
+# -------------------------------------------------------------------
+Ensure-File $TradesCsv "ts_utc,side,base_pair,units,price_aud,notional_aud,run_id,window_start,window_end,mode"
+if (-not $Force -and (Test-Path $TradesCsv) -and -not [string]::IsNullOrWhiteSpace($ws) -and -not [string]::IsNullOrWhiteSpace($we)) {
+  $already = Select-String -Path $TradesCsv -Pattern (",${ws},${we},paper_exec") -SimpleMatch -ErrorAction SilentlyContinue
+  if ($already) {
+    Write-Host "[paper] Trades already exist for window $ws -> $we — skipping portfolio update. Use -Force to override." -ForegroundColor Yellow
+    exit 0
+  }
+}
+
+# Determine weekly budget + allocated total
 $weeklyBudget = [decimal]0
 $allocatedTotal = [decimal]0
 
-# Try first row weekly_budget_aud if present
 if ($signals[0].PSObject.Properties.Name -contains "weekly_budget_aud") {
   $weeklyBudget = To-Decimal $signals[0].weekly_budget_aud
 }
 
-# Some CSVs might have allocated_aud / buy_aud; we’ll sum buy_aud when action=buy
 foreach ($s in $signals) {
   $actRaw = ""
-if (-not [string]::IsNullOrWhiteSpace($actionField)) {
-  $actRaw = GetField $s @($actionField,"action","side","signal","decision") ""
-}
+  if (-not [string]::IsNullOrWhiteSpace($actionField)) {
+    $actRaw = GetField $s @($actionField,"action","side","signal","decision") ""
+  }
 
-$act = ($actRaw.Trim().ToLower())
-if ([string]::IsNullOrWhiteSpace($act)) {
-  # Infer: if buy_aud > 0 OR units > 0 => buy, else hold
-  $inferBuyAud = if ($s.PSObject.Properties.Name -contains "buy_aud") { To-Decimal $s.buy_aud } else { [decimal]0 }
-  $inferUnits  = if ($s.PSObject.Properties.Name -contains "units")   { To-Decimal $s.units }   else { [decimal]0 }
-  if ($inferBuyAud -gt 0 -or $inferUnits -gt 0) { $act = "buy" } else { $act = "hold" }
-}if ($act -eq "buy") {
+  $act = ($actRaw.Trim().ToLower())
+  if ([string]::IsNullOrWhiteSpace($act)) {
+    $inferBuyAud = if ($s.PSObject.Properties.Name -contains "buy_aud") { To-Decimal $s.buy_aud } else { [decimal]0 }
+    $inferUnits  = if ($s.PSObject.Properties.Name -contains "units")   { To-Decimal $s.units }   else { [decimal]0 }
+    if ($inferBuyAud -gt 0 -or $inferUnits -gt 0) { $act = "buy" } else { $act = "hold" }
+  }
+
+  if ($act -eq "buy") {
     if ($s.PSObject.Properties.Name -contains "buy_aud") {
       $allocatedTotal += To-Decimal $s.buy_aud
     }
   }
 }
 
-# Load current cash/positions if they exist
+# Load current cash/positions
 $cash = [decimal]0
 $posMap = @{}
 
@@ -165,8 +186,6 @@ if (Test-Path $PositionsCsv) {
   }
 }
 
-# Initialize cash if no saved portfolio state
-# We store cash in PortfolioCsv as a rolling single-row snapshot, but if not present:
 if (Test-Path $PortfolioCsv) {
   $snap = Import-Csv $PortfolioCsv | Select-Object -Last 1
   if ($snap -and ($snap.PSObject.Properties.Name -contains "cash_aud")) {
@@ -175,13 +194,10 @@ if (Test-Path $PortfolioCsv) {
 }
 
 if ($cash -eq 0 -and $weeklyBudget -gt 0) {
-  # First ever run: start with weekly budget as initial cash pool (Phase 4 simple model)
   $cash = $weeklyBudget
   Write-Host "[paper] Initialized cash to A$weeklyBudget (from weekly_budget_aud)." -ForegroundColor Yellow
 }
 
-# Ensure trade/positions files exist with headers
-Ensure-File $TradesCsv "ts_utc,side,base_pair,units,price_aud,notional_aud,run_id,window_start,window_end,mode"
 Ensure-File $PositionsCsv "base_pair,units,avg_cost_aud,last_price,market_value_aud,unrealized_pnl_aud,unrealized_pnl_pct,run_id_last,window_start_last,window_end_last"
 Ensure-File $PortfolioCsv "ts_utc,run_id,window_start,window_end,weekly_budget_aud,allocated_aud,cash_aud,positions_value_aud,equity_aud"
 
@@ -191,24 +207,23 @@ foreach ($s in $signals) {
   if ([string]::IsNullOrWhiteSpace($pair)) { continue }
 
   $actRaw = ""
-if (-not [string]::IsNullOrWhiteSpace($actionField)) {
-  $actRaw = GetField $s @($actionField,"action","side","signal","decision") ""
-}
+  if (-not [string]::IsNullOrWhiteSpace($actionField)) {
+    $actRaw = GetField $s @($actionField,"action","side","signal","decision") ""
+  }
 
-$act = ($actRaw.Trim().ToLower())
-if ([string]::IsNullOrWhiteSpace($act)) {
-  # Infer: if buy_aud > 0 OR units > 0 => buy, else hold
-  $inferBuyAud = if ($s.PSObject.Properties.Name -contains "buy_aud") { To-Decimal $s.buy_aud } else { [decimal]0 }
-  $inferUnits  = if ($s.PSObject.Properties.Name -contains "units")   { To-Decimal $s.units }   else { [decimal]0 }
-  if ($inferBuyAud -gt 0 -or $inferUnits -gt 0) { $act = "buy" } else { $act = "hold" }
-}$px  = if ($s.PSObject.Properties.Name -contains "last_price") { To-Decimal $s.last_price } else { [decimal]0 }
+  $act = ($actRaw.Trim().ToLower())
+  if ([string]::IsNullOrWhiteSpace($act)) {
+    $inferBuyAud = if ($s.PSObject.Properties.Name -contains "buy_aud") { To-Decimal $s.buy_aud } else { [decimal]0 }
+    $inferUnits  = if ($s.PSObject.Properties.Name -contains "units")   { To-Decimal $s.units }   else { [decimal]0 }
+    if ($inferBuyAud -gt 0 -or $inferUnits -gt 0) { $act = "buy" } else { $act = "hold" }
+  }
 
+  $px = if ($s.PSObject.Properties.Name -contains "last_price") { To-Decimal $s.last_price } else { [decimal]0 }
   $winStart = [string]$s.window_start
   $winEnd   = [string]$s.window_end
   $rid      = [string]$s.run_id
 
   if (-not $posMap.ContainsKey($pair)) {
-    # create an in-memory position row (as PSCustomObject) with all fields
     $posMap[$pair] = [pscustomobject]@{
       base_pair = $pair
       units = "0"
@@ -239,23 +254,19 @@ if ([string]::IsNullOrWhiteSpace($act)) {
     }
 
     if ($buyAud -gt 0 -and $units -gt 0) {
-      # spend cash
       $cash = $cash - $buyAud
 
-      # update avg cost
       $newUnits = $curUnits + $units
       $newAvg = if ($newUnits -gt 0) { (($curUnits * $curAvg) + ($units * $px)) / $newUnits } else { [decimal]0 }
 
       $p.units = "{0:F10}" -f $newUnits
       $p.avg_cost_aud = "{0:F2}" -f $newAvg
 
-      # trade log
       $ts = Get-NowUtcIso
       "$ts,buy,$pair,$units,$px,$buyAud,$rid,$winStart,$winEnd,paper_exec" | Out-File -FilePath $TradesCsv -Append -Encoding utf8
     }
   }
   elseif ($act -eq "sell") {
-    # Optional: if your model emits sells later.
     $sellUnits = if ($s.PSObject.Properties.Name -contains "units") { To-Decimal $s.units } else { [decimal]0 }
     $sellAud   = if ($px -gt 0) { $sellUnits * $px } else { [decimal]0 }
 
@@ -270,14 +281,13 @@ if ([string]::IsNullOrWhiteSpace($act)) {
     }
   }
 
-  # keep last price + meta
   if ($px -gt 0) { $p.last_price = "{0:F2}" -f $px }
-Set-NoteProp -Obj $p -Name "run_id_last" -Value ($rid)
-Set-NoteProp -Obj $p -Name "window_start_last" -Value ($winStart)
-Set-NoteProp -Obj $p -Name "window_end_last" -Value ($winEnd)
+  Set-NoteProp -Obj $p -Name "run_id_last" -Value ($rid)
+  Set-NoteProp -Obj $p -Name "window_start_last" -Value ($winStart)
+  Set-NoteProp -Obj $p -Name "window_end_last" -Value ($winEnd)
 }
 
-# Revalue positions + compute totals
+# Revalue positions
 $posValue = [decimal]0
 foreach ($pair in $posMap.Keys) {
   $p = $posMap[$pair]
@@ -296,18 +306,14 @@ foreach ($pair in $posMap.Keys) {
   $posValue += $mv
 }
 
-# Write positions
+# Write positions + snapshot
 $posOut = $posMap.Values | Sort-Object base_pair
 $posOut | Export-Csv -NoTypeInformation -Path $PositionsCsv -Encoding utf8
 
-# Write portfolio snapshot
-$ws = [string]$signals[0].window_start
-$we = [string]$signals[0].window_end
-$rid0 = [string]$signals[0].run_id
 $equity = $cash + $posValue
-$ts = Get-NowUtcIso
+$tsNow = Get-NowUtcIso
 
-"$ts,$rid0,$ws,$we,$weeklyBudget,$allocatedTotal,$cash,$posValue,$equity" | Out-File -FilePath $PortfolioCsv -Append -Encoding utf8
+"$tsNow,$rid0,$ws,$we,$weeklyBudget,$allocatedTotal,$cash,$posValue,$equity" | Out-File -FilePath $PortfolioCsv -Append -Encoding utf8
 
 Write-Host "[paper] Updated positions + cash from latest window $ws -> $we" -ForegroundColor Green
 Write-Host ("[paper] Cash now: A{0:F2}" -f [double]$cash) -ForegroundColor Green

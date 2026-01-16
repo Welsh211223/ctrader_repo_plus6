@@ -3,7 +3,7 @@ import datetime as dt
 import os
 import time
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, cast
 
 import requests
 
@@ -45,12 +45,13 @@ def fetch_histoday(
     """
     limit = min(days_back, 2000) - 1  # limit is number of points - 1
     url = "https://min-api.cryptocompare.com/data/v2/histoday"
-    params = {
+    params: dict[str, str | int] = {
         "fsym": fsym,
         "tsym": tsym,
-        "limit": limit,
-        "api_key": API_KEY,
+        "limit": int(limit),
     }
+    if API_KEY:
+        params["api_key"] = API_KEY
 
     print(f"[INFO] Requesting {fsym}/{tsym} histoday with limit={limit} ...")
     resp = session.get(url, params=params, timeout=30)
@@ -65,7 +66,9 @@ def fetch_histoday(
 
     bars = data.get("Data", {}).get("Data", [])
     print(f"[INFO] Got {len(bars)} daily bars for {fsym}/{tsym}")
-    return bars
+
+    bars_typed = cast(list[dict[str, object]], bars)
+    return bars_typed
 
 
 def write_ohlcv_csv(

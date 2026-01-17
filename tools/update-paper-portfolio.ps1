@@ -17,7 +17,7 @@ $ErrorActionPreference = "Stop"
 # -------------------------------------------------------------------
 $DuplicateFlag = Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) "..\logs\_duplicate_window.flag"
 if (-not $Force -and (Test-Path $DuplicateFlag)) {
-  Write-Host "[paper] Duplicate window flag present — skipping portfolio update. Use -Force to override." -ForegroundColor Yellow
+  Write-Host "[paper] Duplicate window flag present — NOT appending trades, but continuing portfolio refresh (positions/cash). Use -Force to override trades." -ForegroundColor Yellow
   exit 0
 }
 
@@ -141,7 +141,7 @@ Ensure-File $TradesCsv "ts_utc,side,base_pair,units,price_aud,notional_aud,run_i
 if (-not $Force -and (Test-Path $TradesCsv) -and -not [string]::IsNullOrWhiteSpace($ws) -and -not [string]::IsNullOrWhiteSpace($we)) {
   $already = Select-String -Path $TradesCsv -Pattern (",${ws},${we},paper_exec") -SimpleMatch -ErrorAction SilentlyContinue
   if ($already) {
-    Write-Host "[paper] Trades already exist for window $ws -> $we — skipping portfolio update. Use -Force to override." -ForegroundColor Yellow
+    Write-Host "[paper] Trades already exist for window $ws -> $we — NOT appending trades, but continuing portfolio refresh (positions/cash). Use -Force to override trades." -ForegroundColor Yellow
     exit 0
   }
 }

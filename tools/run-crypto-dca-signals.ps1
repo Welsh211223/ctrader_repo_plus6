@@ -46,7 +46,12 @@ try {
   & python .\tools\crypto_dca_signals_cc.py
   if ($LASTEXITCODE -ne 0) { throw "[crypto] crypto_dca_signals_cc.py failed with exit code $LASTEXITCODE" }
 
-  # -------- Step 4/5 (dup guard + optional append) --------
+    # -------- Step 3.5/5 (signal metadata backfill) --------
+  Write-Host "[$(_TS)] [STEP] Step 3.5/5: backfill-signal-metadata.ps1" -ForegroundColor Cyan
+  & .\tools\backfill-signal-metadata.ps1
+  if ($LASTEXITCODE -ne 0) { throw "[crypto] backfill-signal-metadata.ps1 failed with exit code $LASTEXITCODE" }
+
+# -------- Step 4/5 (dup guard + optional append) --------
   Write-Host "[$(_TS)] [STEP] Step 4/5: duplicate guard + append-paper-ledger.ps1" -ForegroundColor Cyan
 
   $isDup = $false

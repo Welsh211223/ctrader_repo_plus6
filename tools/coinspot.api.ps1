@@ -1,3 +1,7 @@
+$mode = [string]$env:COINSPOT_API_MODE
+if ([string]::IsNullOrWhiteSpace($mode)) { $mode = "ro" }  # ro | full
+$mode = $mode.Trim().ToLowerInvariant()
+
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
@@ -35,8 +39,7 @@ function Invoke-CoinSpotV2 {
 
   if ([string]::IsNullOrWhiteSpace($ApiKey)) { throw "Missing COINSPOT_API_KEY env var." }
   if ([string]::IsNullOrWhiteSpace($ApiSecret)) { throw "Missing COINSPOT_API_SECRET env var." }
-
-  $root = "https://www.coinspot.com.au/api/v2"
+$root = "https://www.coinspot.com.au/api/v2" + ($(if ($mode -eq "ro") { "/ro" } else { "" }))
   $nonce = New-CoinSpotNonce
 
   # Include nonce for signed endpoints

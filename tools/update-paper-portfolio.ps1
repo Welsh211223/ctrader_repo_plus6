@@ -33,9 +33,7 @@ function Set-NoteProp {
   if ($null -eq $Obj) { return }
 
   if ($Obj -is [hashtable] -or $Obj -is [System.Collections.IDictionary]) {
-    $Obj[$Name] = $Value
-    return
-  }
+    $Obj[$Name] = $Value  }
 
   if ($Obj.PSObject.Properties.Name -contains $Name) {
     $Obj.$Name = $Value

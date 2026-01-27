@@ -1,6 +1,7 @@
 name: ctrader-ci
 
 on:
+  workflow_dispatch:
   push:
     branches: [ "main", "test/**", "chore/**" ]
   pull_request:
@@ -42,4 +43,5 @@ jobs:
         shell: pwsh
         run: |
           python -m ruff check .
+
 

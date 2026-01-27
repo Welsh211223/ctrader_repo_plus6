@@ -39,3 +39,8 @@ summarize-backtest.ps1
 data/*
 !data/.keep
 '@ | Set-Content -Path .\.gitignore -Encoding utf8
+# Local env
+.env
+.env.*
+.venv/
+data/

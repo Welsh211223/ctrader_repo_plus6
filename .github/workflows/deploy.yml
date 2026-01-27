@@ -1,0 +1,39 @@
+﻿name: ctrader-ci
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - "crypto_trader/**"
+      - "ci/github_actions/**"
+      - ".github/workflows/deploy.yml"
+  pull_request:
+    branches: [ "main" ]
+    paths:
+      - "crypto_trader/**"
+      - "ci/github_actions/**"
+      - ".github/workflows/deploy.yml"
+
+jobs:
+  build-test:
+    name: ctrader-ci
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run PowerShell CI script
+        shell: pwsh
+        run: ./ci/github_actions/deploy.ps1
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ctrader-artifacts
+          path: artifacts

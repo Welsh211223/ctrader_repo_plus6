@@ -1,6 +1,9 @@
 from __future__ import annotations
+
 from pathlib import Path
+
 import yaml
+
 
 def load_pools_config(path: str | Path) -> dict:
     p = Path(path)

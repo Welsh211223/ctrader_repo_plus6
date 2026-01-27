@@ -10,6 +10,9 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
+
+# [paper] Prevent re-applying trades on re-runs of the same window
+$applyTrades = $true
 # -------------------------------------------------------------------
 # Duplicate-window guard handshake
 # Step 4 (append-paper-ledger) should write logs\_duplicate_window.flag
@@ -138,6 +141,8 @@ if (-not $Force -and (Test-Path $TradesCsv) -and -not [string]::IsNullOrWhiteSpa
   $already = Select-String -Path $TradesCsv -Pattern (",${ws},${we},paper_exec") -SimpleMatch -ErrorAction SilentlyContinue
   if ($already) {
     Write-Host "[paper] Trades already exist for window $ws -> $we — NOT appending trades, but continuing portfolio refresh (positions/cash). Use -Force to override trades." -ForegroundColor Yellow  }
+
+$applyTrades = $false
 }
 
 # Determine weekly budget + allocated total
@@ -191,12 +196,23 @@ if ($cash -eq 0 -and $weeklyBudget -gt 0) {
   $cash = $weeklyBudget
   Write-Host "[paper] Initialized cash to A$weeklyBudget (from weekly_budget_aud)." -ForegroundColor Yellow
 }
-
+# [paper] Weekly top-up (deposit weekly budget once per NEW window) — ledger-idempotent
+try {
+    & "$PSScriptRoot\paper-weekly-topup.ps1" -WindowStart $ws -WindowEnd $we -WeeklyBudget $weeklyBudget -CashRef ([ref]$cash) -RunId $rid0
+} catch {
+  Write-Host ("[paper] Weekly top-up failed: " + $($_.Exception.Message) + " (continuing)") -ForegroundColor Yellow
+}
 Ensure-File $PositionsCsv "base_pair,units,avg_cost_aud,last_price,market_value_aud,unrealized_pnl_aud,unrealized_pnl_pct,run_id_last,window_start_last,window_end_last"
 Ensure-File $PortfolioCsv "ts_utc,run_id,window_start,window_end,weekly_budget_aud,allocated_aud,cash_aud,positions_value_aud,equity_aud"
 
 # Apply signals as paper trades
+
 foreach ($s in $signals) {
+  if (-not $applyTrades) {
+    Write-Host "[paper] Trades already applied for this window — skipping trade application (no cash/position drift)." -ForegroundColor Yellow
+    break
+  }
+
   $pair = GetField $s @($pairField,"base_pair","symbol","pair") ""
   if ([string]::IsNullOrWhiteSpace($pair)) { continue }
 
@@ -312,3 +328,97 @@ $tsNow = Get-NowUtcIso
 Write-Host "[paper] Updated positions + cash from latest window $ws -> $we" -ForegroundColor Green
 Write-Host ("[paper] Cash now: A{0:F2}" -f [double]$cash) -ForegroundColor Green
 Write-Host ("[paper] Positions value: A{0:F2} | Equity: A{1:F2}" -f [double]$posValue, [double]$equity) -ForegroundColor Green
+Ensure-File $PositionsCsv "base_pair,units,avg_cost_aud,last_price,market_value_aud,unrealized_pnl_aud,unrealized_pnl_pct,run_id_last,window_start_last,window_end_last"
+Ensure-File $PortfolioCsv "ts_utc,run_id,window_start,window_end,weekly_budget_aud,allocated_aud,cash_aud,positions_value_aud,equity_aud"
+
+# Apply signals as paper trades
+
+foreach ($s in $signals) {
+  if (-not $applyTrades) {
+    Write-Host "[paper] Trades already applied for this window — skipping trade application (no cash/position drift)." -ForegroundColor Yellow
+    break
+  }
+
+  $pair = GetField $s @($pairField,"base_pair","symbol","pair") ""
+  if ([string]::IsNullOrWhiteSpace($pair)) { continue }
+
+  $actRaw = ""
+  if (-not [string]::IsNullOrWhiteSpace($actionField)) {
+    $actRaw = GetField $s @($actionField,"action","side","signal","decision") ""
+  }
+
+  $act = ($actRaw.Trim().ToLower())
+  if ([string]::IsNullOrWhiteSpace($act)) {
+    $inferBuyAud = if ($s.PSObject.Properties.Name -contains "buy_aud") { To-Decimal $s.buy_aud } else { [decimal]0 }
+    $inferUnits  = if ($s.PSObject.Properties.Name -contains "units")   { To-Decimal $s.units }   else { [decimal]0 }
+    if ($inferBuyAud -gt 0 -or $inferUnits -gt 0) { $act = "buy" } else { $act = "hold" }
+  }
+
+  $px = if ($s.PSObject.Properties.Name -contains "last_price") { To-Decimal $s.last_price } else { [decimal]0 }
+  $winStart = [string]$s.window_start
+  $winEnd   = [string]$s.window_end
+  $rid      = [string]$s.run_id
+
+  if (-not $posMap.ContainsKey($pair)) {
+    $posMap[$pair] = [pscustomobject]@{
+      base_pair = $pair
+      units = "0"
+      avg_cost_aud = "0"
+      last_price = "0"
+      market_value_aud = "0"
+      unrealized_pnl_aud = "0"
+      unrealized_pnl_pct = "0"
+      run_id_last = ""
+      window_start_last = ""
+      window_end_last = ""
+    }
+  }
+
+  $p = $posMap[$pair]
+  $curUnits = To-Decimal $p.units
+  $curAvg   = To-Decimal $p.avg_cost_aud
+
+  if ($act -eq "buy") {
+    $buyAud = if ($s.PSObject.Properties.Name -contains "buy_aud") { To-Decimal $s.buy_aud } else { [decimal]0 }
+    $units  = if ($s.PSObject.Properties.Name -contains "units") { To-Decimal $s.units } else { [decimal]0 }
+
+    if ($units -le 0 -and $px -gt 0 -and $buyAud -gt 0) {
+      $units = $buyAud / $px
+    }
+    if ($buyAud -le 0 -and $px -gt 0 -and $units -gt 0) {
+      $buyAud = $units * $px
+    }
+
+    if ($buyAud -gt 0 -and $units -gt 0) {
+      $cash = $cash - $buyAud
+
+      $newUnits = $curUnits + $units
+      $newAvg = if ($newUnits -gt 0) { (($curUnits * $curAvg) + ($units * $px)) / $newUnits } else { [decimal]0 }
+
+      $p.units = "{0:F10}" -f $newUnits
+      $p.avg_cost_aud = "{0:F2}" -f $newAvg
+
+      $ts = Get-NowUtcIso
+      "$ts,buy,$pair,$units,$px,$buyAud,$rid,$winStart,$winEnd,paper_exec" | Out-File -FilePath $TradesCsv -Append -Encoding utf8
+    }
+  }
+  elseif ($act -eq "sell") {
+    $sellUnits = if ($s.PSObject.Properties.Name -contains "units") { To-Decimal $s.units } else { [decimal]0 }
+    $sellAud   = if ($px -gt 0) { $sellUnits * $px } else { [decimal]0 }
+
+    if ($sellUnits -gt 0 -and $curUnits -gt 0) {
+      if ($sellUnits -gt $curUnits) { $sellUnits = $curUnits }
+      $sellAud = $sellUnits * $px
+      $cash = $cash + $sellAud
+      $p.units = "{0:F10}" -f ([decimal]$curUnits - $sellUnits)
+
+      $ts = Get-NowUtcIso
+      "$ts,sell,$pair,$sellUnits,$px,$sellAud,$rid,$winStart,$winEnd,paper_exec" | Out-File -FilePath $TradesCsv -Append -Encoding utf8
+    }
+  }
+
+  if ($px -gt 0) { $p.last_price = "{0:F2}" -f $px }
+  Set-NoteProp -Obj $p -Name "run_id_last" -Value ($rid)
+  Set-NoteProp -Obj $p -Name "window_start_last" -Value ($winStart)
+  Set-NoteProp -Obj $p -Name "window_end_last" -Value ($winEnd)
+}

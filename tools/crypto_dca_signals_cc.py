@@ -11,7 +11,7 @@ OUT_TEXT = os.path.join(LOGS_DIR, "latest_crypto_signal.txt")
 OUT_CSV = os.path.join(LOGS_DIR, "latest_crypto_signal.csv")
 
 # Must match WEEKLY_BUDGET_AUD in multicoin_dca_backtest_trend_cc.py
-WEEKLY_BUDGET_AUD = 1000.0
+WEEKLY_BUDGET_AUD = 100.0
 
 
 def load_rows(path: str) -> List[dict]:

@@ -11,7 +11,7 @@ LOGS_DIR = os.path.join(BASE_DIR, "..", "logs")
 CC_DIR = os.path.join(LOGS_DIR, "cc_history")
 
 # Weekly portfolio budget and base weights
-WEEKLY_BUDGET_AUD = 1000.0
+WEEKLY_BUDGET_AUD = 100.0
 WEIGHTS = {
     "BTC/AUD": 0.50,
     "ETH/AUD": 0.20,

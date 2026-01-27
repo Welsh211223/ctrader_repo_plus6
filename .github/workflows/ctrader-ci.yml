@@ -1,5 +1,8 @@
 name: ctrader-ci
 
+env:
+  PYTHONPATH: src
+
 on:
   pull_request:
   push:
@@ -11,3 +14,4 @@ jobs:
       - uses: actions/checkout@v4
       - name: ctrader-ci smoke
         run: echo "ctrader-ci ok"
+

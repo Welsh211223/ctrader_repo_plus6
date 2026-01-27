@@ -45,3 +45,8 @@ dashboard.broken-*.py
 *.dedup_tail.bak_*
 *.fix*.bak_*
 *.topupcall.bak_*
+# Local scratch (not part of repo)
+run.py
+simulator.py
+strategies/
+summarize-backtest.ps1

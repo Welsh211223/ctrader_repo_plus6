@@ -13,3 +13,35 @@ data/
 
 # keep the data folder structure without tracking files
 ni .\data\.keep -Force | Out-Null
+# --- IDE / local workspace
+.idea/
+.vscode/
+*.code-workspace
+
+# --- Python build artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+
+# --- Local runtime / outputs
+logs/
+*.log
+config/live.flag
+src/ctrader.egg-info/
+
+# --- Local scratch files
+dashboard.py.bak
+dashboard.broken-*.py
+*.broken-*.py
+
+# --- Backup patterns used by our patch scripts
+*.bak
+*.bak_*
+*.RESTOREPOINT_*
+*.dedup_tail.bak_*
+*.fix*.bak_*
+*.topupcall.bak_*

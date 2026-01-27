@@ -1,23 +1,35 @@
 from __future__ import annotations
-# path shim
+
+import argparse
+import shlex
+import subprocess
 import sys
+import time
 from pathlib import Path
+
+# path shim
+
 SRC_DIR = Path(__file__).resolve().parents[3]
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
-import argparse
-import subprocess
-import time
-import shlex
 
 def main():
     ap = argparse.ArgumentParser(description="Simple scheduler for ctrader.cli.trade")
     ap.add_argument("--interval-sec", type=int, default=1800, help="How often to run.")
     ap.add_argument("--pool", choices=["conservative", "aggressive"], required=True)
-    ap.add_argument("--max-runs", type=int, default=0, help="Stop after N runs (0 = infinite).")
-    ap.add_argument("--python", type=str, default=sys.executable, help="Python interpreter to use.")
-    ap.add_argument("--extra", type=str, default="", help="Extra args for trade, e.g. \"--turnover-adaptive --notify\"")
+    ap.add_argument(
+        "--max-runs", type=int, default=0, help="Stop after N runs (0 = infinite)."
+    )
+    ap.add_argument(
+        "--python", type=str, default=sys.executable, help="Python interpreter to use."
+    )
+    ap.add_argument(
+        "--extra",
+        type=str,
+        default="",
+        help='Extra args for trade, e.g. "--turnover-adaptive --notify"',
+    )
     args = ap.parse_args()
 
     cmd_base = f"{shlex.quote(args.python)} -m ctrader.cli.trade --pool {args.pool} {args.extra}".strip()
@@ -40,6 +52,7 @@ def main():
             break
 
         time.sleep(max(5, int(args.interval_sec)))
+
 
 if __name__ == "__main__":
     main()

@@ -1,18 +1,4 @@
-# verify these lines exist in .gitignore
-@"
-.venv/
-__pycache__/
-*.py[cod]
-
-.env
-.env.*
-
-data/
-!data/.keep
-"@ | Out-File -Encoding utf8 .\.gitignore
-
-# keep the data folder structure without tracking files
-ni .\data\.keep -Force | Out-Null
+@'
 # --- IDE / local workspace
 .idea/
 .vscode/
@@ -31,12 +17,15 @@ build/
 logs/
 *.log
 config/live.flag
-src/ctrader.egg-info/
 
 # --- Local scratch files
 dashboard.py.bak
 dashboard.broken-*.py
 *.broken-*.py
+run.py
+simulator.py
+strategies/
+summarize-backtest.ps1
 
 # --- Backup patterns used by our patch scripts
 *.bak
@@ -45,8 +34,8 @@ dashboard.broken-*.py
 *.dedup_tail.bak_*
 *.fix*.bak_*
 *.topupcall.bak_*
-# Local scratch (not part of repo)
-run.py
-simulator.py
-strategies/
-summarize-backtest.ps1
+
+# --- Data folder: keep structure, ignore contents
+data/*
+!data/.keep
+'@ | Set-Content -Path .\.gitignore -Encoding utf8

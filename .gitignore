@@ -44,3 +44,5 @@ data/*
 .env.*
 .venv/
 data/
+# local CI venv
+.venv_ci/

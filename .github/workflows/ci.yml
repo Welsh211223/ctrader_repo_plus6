@@ -1,7 +1,6 @@
 name: ctrader-ci
 on:
   workflow_dispatch:
-
 jobs:
   build-test:
     name: ctrader-ci
@@ -38,6 +37,7 @@ jobs:
         shell: pwsh
         run: |
           python -m ruff check .
+
 
 
 

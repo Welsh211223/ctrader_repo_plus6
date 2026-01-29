@@ -1,50 +1,46 @@
-# verify these lines exist in .gitignore
-@"
-.venv/
+@'
+# --- IDE / local workspace
+.idea/
+.vscode/
+*.code-workspace
+
+# --- Python build artifacts
 __pycache__/
-*.py[cod]
-
-.env
-.env.*
-
-data/
-!data/.keep
-"@ | Out-File -Encoding utf8 .\.gitignore
-
-# keep the data folder structure without tracking files
-ni .\data\.keep -Force | Out-Null
-
-.idea/
-
-.idea/
-
+*.pyc
+*.pyo
+*.pyd
 *.egg-info/
+dist/
+build/
 
-src/ctrader.egg-info/
-
-.streamlit/
-
-.pytest_cache/
-
-.ruff_cache/
-
-.mypy_cache/
-
-**/__pycache__/
-
+# --- Local runtime / outputs
 logs/
-# Local / temp
+*.log
 config/live.flag
 
-# Backups / scratch
-*.bak
-*.bak_*
-*.backup_*.csv
+# --- Local scratch files
 dashboard.py.bak
 dashboard.broken-*.py
-
-# Scratch runners (if you keep them local)
+*.broken-*.py
 run.py
 simulator.py
 strategies/
 summarize-backtest.ps1
+
+# --- Backup patterns used by our patch scripts
+*.bak
+*.bak_*
+*.RESTOREPOINT_*
+*.dedup_tail.bak_*
+*.fix*.bak_*
+*.topupcall.bak_*
+
+# --- Data folder: keep structure, ignore contents
+data/*
+!data/.keep
+'@ | Set-Content -Path .\.gitignore -Encoding utf8
+# Local env
+.env
+.env.*
+.venv/
+data/

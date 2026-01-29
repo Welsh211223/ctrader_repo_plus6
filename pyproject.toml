@@ -7,6 +7,16 @@ name = "ctrader"
 version = "0.2.0"
 requires-python = ">=3.10"
 
+dependencies = [
+  
+  
+  "python-dotenv","pyyaml","numpy",
+  "pandas",
+  "requests",
+  "tenacity",
+  "streamlit"
+]
+
 [tool.setuptools.packages.find]
 where = ["src"]
 
@@ -25,3 +35,5 @@ warn_unused_ignores = true
 warn_return_any = true
 warn_redundant_casts = true
 pretty = true
+
+

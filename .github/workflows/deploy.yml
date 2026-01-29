@@ -1,4 +1,4 @@
-﻿name: ctrader-ci
+name: ctrader-ci
 
 on:
   push:
@@ -7,7 +7,6 @@ on:
       - "crypto_trader/**"
       - "ci/github_actions/**"
       - ".github/workflows/deploy.yml"
-  pull_request:
     branches: [ "main" ]
     paths:
       - "crypto_trader/**"
@@ -37,3 +36,4 @@ jobs:
         with:
           name: ctrader-artifacts
           path: artifacts
+

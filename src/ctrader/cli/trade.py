@@ -1,4 +1,5 @@
 from __future__ import annotations
+from pathlib import Path
 
 # Keep this tiny shim first so "python ...\src\ctrader\cli\trade.py" still works
 # when executed directly (adds repo/src to sys.path if needed).
@@ -6,7 +7,6 @@ try:
     import ctrader  # noqa: F401
 except Exception:
     import sys
-    from pathlib import Path
 
     SRC_DIR = Path(__file__).resolve().parents[3] / "src"
     if SRC_DIR.exists():
@@ -934,3 +934,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

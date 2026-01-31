@@ -25,8 +25,7 @@ risk_off:
     extra_reserve_pct: 5.0   # add to --min-cash-reserve-pct when risk_off
 
 rebalance:
-  threshold_pct: 0.0
-
+  threshold_pct: 1.0
 execution:
   turnover_cap_pct: 20.0
   min_order_value_default: 10.0
@@ -34,11 +33,9 @@ execution:
     BTC: 6
     ETH: 6
     SOL: 6
-    AVAX: 6
-    HBAR: 6
-    QNT: 6
+
     DOGE: 0
-    SHIB: 0
+
     XRP: 2
 
 pools:
@@ -50,14 +47,10 @@ pools:
       SOL: 0.10
       XRP: 0.07
       DOGE: 0.05
-      SHIB: 0.03
-      HBAR: 0.00
-      QNT: 0.00
-      AVAX: 0.00
     categories:
-      core: [BTC, ETH, SOL, AVAX, XRP]
-      meme: [DOGE, SHIB]
-      ai: [HBAR, QNT]
+      core: [BTC, ETH, SOL, XRP]
+      meme: [DOGE]
+      ai: []
     max_per_asset_pct: 100
     max_meme_bucket_pct: 100
     max_ai_bucket_pct: 100
@@ -70,14 +63,11 @@ pools:
       SOL: 0.15
       XRP: 0.10
       DOGE: 0.10
-      SHIB: 0.10
-      AVAX: 0.10
-      HBAR: 0.10
-      QNT: 0.05
     categories:
-      core: [BTC, ETH, SOL, AVAX, XRP]
-      meme: [DOGE, SHIB]
-      ai: [HBAR, QNT]
+      core: [BTC, ETH, SOL, XRP]
+      meme: [DOGE]
+      ai: []
     max_per_asset_pct: 100
     max_meme_bucket_pct: 100
     max_ai_bucket_pct: 100
+
